@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -14,6 +19,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "aurora-super-secret-key";
 // Supabase initialization
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("⚠️ AVISO: SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não estão configurados!");
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(express.json());
@@ -47,65 +57,100 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // --- Auth Routes ---
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
-  console.log(`Login attempt for: ${email}`);
+  console.log(`Tentativa de login para: ${email}`);
   
-  const { data: user, error } = await supabase
-    .from("users")
-    .select("*")
-    .eq("email", email)
-    .single();
-
-  if (error) {
-    console.error(`Supabase error for ${email}:`, error.message);
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("ERRO: Variáveis de ambiente do Supabase não configuradas!");
+    return res.status(500).json({ error: "Configuração do servidor incompleta (Supabase)" });
   }
 
-  if (!user) {
-    console.log(`User not found: ${email}`);
-    return res.status(401).json({ error: "Credenciais inválidas" });
-  }
+  try {
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
 
-  // Debug: Verificar se a senha no banco parece um hash bcrypt (começa com $2a$ ou $2b$)
-  if (!user.password.startsWith('$2')) {
-    console.warn(`AVISO: A senha do usuário ${email} no banco de dados NÃO parece estar criptografada com bcrypt. O login irá falhar.`);
-  }
+    if (error) {
+      console.error(`Erro Supabase para ${email}:`, error.message);
+      // Se for erro de tabela não encontrada ou algo assim, avisar
+      return res.status(401).json({ error: `Erro no banco de dados: ${error.message}` });
+    }
 
-  const isPasswordCorrect = bcrypt.compareSync(password, user.password);
-  if (!isPasswordCorrect) {
-    console.log(`Incorrect password for: ${email}`);
-    return res.status(401).json({ error: "Credenciais inválidas" });
-  }
+    if (!user) {
+      console.log(`Usuário não encontrado: ${email}`);
+      return res.status(401).json({ error: "Usuário não encontrado. Você já rodou a rota /api/auth/seed?" });
+    }
 
-  const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET);
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    // Debug: Verificar se a senha no banco parece um hash bcrypt (começa com $2a$ ou $2b$)
+    if (!user.password.startsWith('$2')) {
+      console.warn(`AVISO: A senha do usuário ${email} no banco de dados NÃO parece estar criptografada com bcrypt. Tentando comparação direta...`);
+      if (password === user.password) {
+        console.log("Login bem-sucedido via comparação direta (NÃO RECOMENDADO EM PRODUÇÃO)");
+        const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET);
+        return res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+      }
+    }
+
+    const isPasswordCorrect = bcrypt.compareSync(password, user.password);
+    if (!isPasswordCorrect) {
+      console.log(`Senha incorreta para: ${email}`);
+      return res.status(401).json({ error: "Senha incorreta" });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET);
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (err: any) {
+    console.error("Erro fatal no login:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Temporary route to seed a default user if none exists
 app.get("/api/auth/seed", async (req, res) => {
-  const email = "admin@auroratech.com";
-  const password = "admin";
-  const hashedPassword = bcrypt.hashSync(password, 10);
-  
-  const { data: existingUser } = await supabase
-    .from("users")
-    .select("*")
-    .eq("email", email)
-    .single();
+  try {
+    const email = "admin@auroratech.com";
+    const password = "admin";
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    
+    console.log("Iniciando processo de seed...");
 
-  if (existingUser) {
-    return res.json({ message: "User already exists", email });
+    const { data: existingUser, error: fetchError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      console.error("Erro ao buscar usuário existente no seed:", fetchError.message);
+      return res.status(500).json({ error: fetchError.message });
+    }
+
+    if (existingUser) {
+      console.log("Usuário admin já existe no banco.");
+      return res.json({ message: "Usuário já existe", email });
+    }
+
+    const { error: insertError } = await supabase
+      .from("users")
+      .insert({
+        id: uuidv4(),
+        email,
+        password: hashedPassword,
+        name: "Administrador"
+      });
+
+    if (insertError) {
+      console.error("Erro ao inserir usuário no seed:", insertError.message);
+      return res.status(500).json({ error: insertError.message });
+    }
+
+    console.log("Usuário admin criado com sucesso!");
+    res.json({ message: "Usuário criado com sucesso!", email, password });
+  } catch (err: any) {
+    console.error("Erro fatal no seed:", err);
+    res.status(500).json({ error: err.message });
   }
-
-  const { error } = await supabase
-    .from("users")
-    .insert({
-      id: uuidv4(),
-      email,
-      password: hashedPassword,
-      name: "Administrador"
-    });
-
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ message: "User created successfully", email, password });
 });
 
 app.post("/api/auth/change-password", authenticateToken, async (req: any, res) => {
@@ -415,10 +460,17 @@ if (process.env.NODE_ENV !== "production") {
     appType: "spa",
   });
   app.use(vite.middlewares);
-  
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+} else {
+  // Serve static files in production
+  const distPath = path.resolve(__dirname, "../dist");
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
   });
 }
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
+});
 
 export default app;

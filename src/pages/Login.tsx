@@ -17,11 +17,11 @@ export default function Login() {
     setError('');
 
     try {
-      const success = await login(email, password);
-      if (success) {
+      const result = await login(email, password);
+      if (result.success) {
         navigate('/');
       } else {
-        setError('E-mail ou senha incorretos.');
+        setError(result.message || 'E-mail ou senha incorretos.');
       }
     } catch (err) {
       setError('Ocorreu um erro ao tentar entrar. Tente novamente.');

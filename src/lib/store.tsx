@@ -73,7 +73,7 @@ interface AppState {
 interface AppContextType extends AppState {
   user: { id: string; email: string; name: string } | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   changePassword: (newPassword: string) => Promise<boolean>;
   addProject: (project: Omit<Project, 'id'>) => Promise<void>;
@@ -162,16 +162,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
 
-      if (!res.ok) return false;
-
       const data = await res.json();
+
+      if (!res.ok) {
+        return { success: false, message: data.error || 'E-mail ou senha incorretos.' };
+      }
+
       setToken(data.token);
       setUser(data.user);
       localStorage.setItem('aurora_token', data.token);
       localStorage.setItem('aurora_user', JSON.stringify(data.user));
-      return true;
+      return { success: true };
     } catch (err) {
-      return false;
+      return { success: false, message: 'Ocorreu um erro ao tentar entrar. Verifique sua conexão.' };
     }
   };
 
