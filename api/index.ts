@@ -19,7 +19,15 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", env: process.env.NODE_ENV });
+  res.json({ 
+    status: "ok", 
+    env: process.env.NODE_ENV,
+    supabase: {
+      hasUrl: !!process.env.SUPABASE_URL,
+      hasKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      hasJwt: !!process.env.JWT_SECRET
+    }
+  });
 });
 
 // Auth Middleware
@@ -39,6 +47,7 @@ const authenticateToken = (req: any, res: any, next: any) => {
 // --- Auth Routes ---
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
+  console.log(`Login attempt for: ${email}`);
   
   const { data: user, error } = await supabase
     .from("users")
@@ -46,12 +55,57 @@ app.post("/api/auth/login", async (req, res) => {
     .eq("email", email)
     .single();
 
-  if (error || !user || !bcrypt.compareSync(password, user.password)) {
+  if (error) {
+    console.error(`Supabase error for ${email}:`, error.message);
+  }
+
+  if (!user) {
+    console.log(`User not found: ${email}`);
+    return res.status(401).json({ error: "Credenciais inválidas" });
+  }
+
+  // Debug: Verificar se a senha no banco parece um hash bcrypt (começa com $2a$ ou $2b$)
+  if (!user.password.startsWith('$2')) {
+    console.warn(`AVISO: A senha do usuário ${email} no banco de dados NÃO parece estar criptografada com bcrypt. O login irá falhar.`);
+  }
+
+  const isPasswordCorrect = bcrypt.compareSync(password, user.password);
+  if (!isPasswordCorrect) {
+    console.log(`Incorrect password for: ${email}`);
     return res.status(401).json({ error: "Credenciais inválidas" });
   }
 
   const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET);
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+});
+
+// Temporary route to seed a default user if none exists
+app.get("/api/auth/seed", async (req, res) => {
+  const email = "admin@auroratech.com";
+  const password = "admin";
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  
+  const { data: existingUser } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .single();
+
+  if (existingUser) {
+    return res.json({ message: "User already exists", email });
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .insert({
+      id: uuidv4(),
+      email,
+      password: hashedPassword,
+      name: "Administrador"
+    });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ message: "User created successfully", email, password });
 });
 
 app.post("/api/auth/change-password", authenticateToken, async (req: any, res) => {
