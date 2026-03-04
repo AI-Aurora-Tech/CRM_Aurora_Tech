@@ -1,6 +1,6 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
+import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
@@ -12,96 +12,10 @@ const app = express();
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "aurora-super-secret-key";
 
-// Database initialization
-const db = new Database("database.sqlite");
-
-// Create tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    name TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS projects (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL,
-    name TEXT NOT NULL,
-    clientName TEXT NOT NULL,
-    description TEXT,
-    status TEXT NOT NULL,
-    dueDate TEXT,
-    progress INTEGER DEFAULT 0,
-    value REAL DEFAULT 0,
-    assignedTo TEXT,
-    FOREIGN KEY(userId) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY,
-    projectId TEXT NOT NULL,
-    title TEXT NOT NULL,
-    completed INTEGER DEFAULT 0,
-    type TEXT NOT NULL,
-    FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL,
-    date TEXT NOT NULL,
-    description TEXT NOT NULL,
-    amount REAL NOT NULL,
-    type TEXT NOT NULL,
-    category TEXT NOT NULL,
-    provider TEXT NOT NULL,
-    paymentMethod TEXT NOT NULL,
-    installments INTEGER,
-    currentInstallment INTEGER,
-    FOREIGN KEY(userId) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL,
-    title TEXT NOT NULL,
-    start TEXT NOT NULL,
-    end TEXT NOT NULL,
-    description TEXT,
-    location TEXT,
-    type TEXT NOT NULL,
-    FOREIGN KEY(userId) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS leads (
-    id TEXT PRIMARY KEY,
-    userId TEXT NOT NULL,
-    name TEXT NOT NULL,
-    industry TEXT NOT NULL,
-    instagram TEXT,
-    email TEXT,
-    description TEXT,
-    generatedAt TEXT NOT NULL,
-    FOREIGN KEY(userId) REFERENCES users(id)
-  );
-`);
-
-// Seed users if empty
-const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
-if (userCount.count === 0) {
-  const defaultPassword = bcrypt.hashSync("aurora123", 10);
-  const users = [
-    { id: uuidv4(), email: "pedro@auroratech.com", name: "Pedro Santos" },
-    { id: uuidv4(), email: "thomas@auroratech.com", name: "Thomas" },
-    { id: uuidv4(), email: "geovanna@auroratech.com", name: "Geovanna" },
-    { id: uuidv4(), email: "ivaldo@auroratech.com", name: "Ivaldo" },
-  ];
-
-  const insertUser = db.prepare("INSERT INTO users (id, email, password, name) VALUES (?, ?, ?, ?)");
-  users.forEach(u => insertUser.run(u.id, u.email, defaultPassword, u.name));
-  console.log("Default users created with password: aurora123");
-}
+// Supabase initialization
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(express.json());
 
@@ -120,11 +34,16 @@ const authenticateToken = (req: any, res: any, next: any) => {
 };
 
 // --- Auth Routes ---
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+  
+  const { data: user, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .single();
 
-  if (!user || !bcrypt.compareSync(password, user.password)) {
+  if (error || !user || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ error: "Credenciais inválidas" });
   }
 
@@ -132,149 +51,281 @@ app.post("/api/auth/login", (req, res) => {
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
 });
 
-app.post("/api/auth/change-password", authenticateToken, (req: any, res) => {
+app.post("/api/auth/change-password", authenticateToken, async (req: any, res) => {
   const { newPassword } = req.body;
   const hashedPassword = bcrypt.hashSync(newPassword, 10);
-  db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashedPassword, req.user.id);
+  
+  const { error } = await supabase
+    .from("users")
+    .update({ password: hashedPassword })
+    .eq("id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
 // --- Data Routes ---
 
 // Projects
-app.get("/api/projects", authenticateToken, (req: any, res) => {
-  const projects = db.prepare("SELECT * FROM projects WHERE userId = ?").all(req.user.id) as any[];
-  const projectsWithTasks = projects.map(p => {
-    const tasks = db.prepare("SELECT * FROM tasks WHERE projectId = ?").all(p.id);
+app.get("/api/projects", authenticateToken, async (req: any, res) => {
+  const { data: projects, error: pError } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("user_id", req.user.id);
+
+  if (pError) return res.status(500).json({ error: pError.message });
+
+  const projectsWithTasks = await Promise.all(projects.map(async (p) => {
+    const { data: tasks } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("project_id", p.id);
+    
     return { 
       ...p, 
-      tasks: tasks.map((t: any) => ({ ...t, completed: !!t.completed })),
-      assignedTo: p.assignedTo ? JSON.parse(p.assignedTo) : []
+      userId: p.user_id, // Map for frontend
+      clientName: p.client_name,
+      dueDate: p.due_date,
+      tasks: (tasks || []).map((t: any) => ({ ...t, completed: !!t.completed })),
+      assignedTo: p.assigned_to ? JSON.parse(p.assigned_to) : []
     };
-  });
+  }));
+  
   res.json(projectsWithTasks);
 });
 
-app.post("/api/projects", authenticateToken, (req: any, res) => {
+app.post("/api/projects", authenticateToken, async (req: any, res) => {
   const { name, clientName, description, status, dueDate, progress, value, tasks, assignedTo } = req.body;
   const projectId = uuidv4();
-  db.prepare("INSERT INTO projects (id, userId, name, clientName, description, status, dueDate, progress, value, assignedTo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(projectId, req.user.id, name, clientName, description, status, dueDate, progress || 0, value || 0, JSON.stringify(assignedTo || []));
+  
+  const { error: pError } = await supabase
+    .from("projects")
+    .insert({
+      id: projectId,
+      user_id: req.user.id,
+      name,
+      client_name: clientName,
+      description,
+      status,
+      due_date: dueDate,
+      progress: progress || 0,
+      value: value || 0,
+      assigned_to: JSON.stringify(assignedTo || [])
+    });
+
+  if (pError) return res.status(500).json({ error: pError.message });
   
   if (tasks && Array.isArray(tasks)) {
-    const insertTask = db.prepare("INSERT INTO tasks (id, projectId, title, completed, type) VALUES (?, ?, ?, ?, ?)");
-    tasks.forEach((t: any) => insertTask.run(uuidv4(), projectId, t.title, t.completed ? 1 : 0, t.type));
+    const tasksToInsert = tasks.map(t => ({
+      id: uuidv4(),
+      project_id: projectId,
+      title: t.title,
+      completed: t.completed ? 1 : 0,
+      type: t.type
+    }));
+    await supabase.from("tasks").insert(tasksToInsert);
   }
   res.json({ id: projectId });
 });
 
-app.patch("/api/projects/:id", authenticateToken, (req: any, res) => {
+app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   const { id } = req.params;
   const updates = { ...req.body };
   
-  if (updates.assignedTo) {
-    updates.assignedTo = JSON.stringify(updates.assignedTo);
-  }
+  // Map frontend fields to DB fields
+  const dbUpdates: any = {};
+  if (updates.name) dbUpdates.name = updates.name;
+  if (updates.clientName) dbUpdates.client_name = updates.clientName;
+  if (updates.description) dbUpdates.description = updates.description;
+  if (updates.status) dbUpdates.status = updates.status;
+  if (updates.dueDate) dbUpdates.due_date = updates.dueDate;
+  if (updates.progress !== undefined) dbUpdates.progress = updates.progress;
+  if (updates.value !== undefined) dbUpdates.value = updates.value;
+  if (updates.assignedTo) dbUpdates.assigned_to = JSON.stringify(updates.assignedTo);
 
-  const fields = Object.keys(updates).filter(k => k !== 'tasks').map(k => `${k} = ?`).join(", ");
-  const values = Object.keys(updates).filter(k => k !== 'tasks').map(k => updates[k]);
-  
-  if (fields) {
-    db.prepare(`UPDATE projects SET ${fields} WHERE id = ? AND userId = ?`).run(...values, id, req.user.id);
-  }
+  const { error } = await supabase
+    .from("projects")
+    .update(dbUpdates)
+    .eq("id", id)
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
-app.delete("/api/projects/:id", authenticateToken, (req: any, res) => {
-  db.prepare("DELETE FROM projects WHERE id = ? AND userId = ?").run(req.params.id, req.user.id);
+app.delete("/api/projects/:id", authenticateToken, async (req: any, res) => {
+  const { error } = await supabase
+    .from("projects")
+    .delete()
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
 // Tasks
-app.post("/api/projects/:projectId/tasks", authenticateToken, (req: any, res) => {
+app.post("/api/projects/:projectId/tasks", authenticateToken, async (req: any, res) => {
   const { projectId } = req.params;
   const { title, completed, type } = req.body;
   const taskId = uuidv4();
-  db.prepare("INSERT INTO tasks (id, projectId, title, completed, type) VALUES (?, ?, ?, ?, ?)")
-    .run(taskId, projectId, title, completed ? 1 : 0, type);
+  
+  const { error } = await supabase
+    .from("tasks")
+    .insert({
+      id: taskId,
+      project_id: projectId,
+      title,
+      completed: completed ? 1 : 0,
+      type
+    });
+
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ id: taskId });
 });
 
-app.patch("/api/tasks/:id", authenticateToken, (req: any, res) => {
+app.patch("/api/tasks/:id", authenticateToken, async (req: any, res) => {
   const { completed } = req.body;
-  db.prepare("UPDATE tasks SET completed = ? WHERE id = ?").run(completed ? 1 : 0, req.params.id);
+  const { error } = await supabase
+    .from("tasks")
+    .update({ completed: completed ? 1 : 0 })
+    .eq("id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
 // Transactions
-app.get("/api/transactions", authenticateToken, (req: any, res) => {
-  const transactions = db.prepare("SELECT * FROM transactions WHERE userId = ?").all(req.user.id);
-  res.json(transactions);
+app.get("/api/transactions", authenticateToken, async (req: any, res) => {
+  const { data: transactions, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  
+  // Map back to frontend camelCase
+  const mapped = (transactions || []).map(t => ({
+    ...t,
+    userId: t.user_id,
+    paymentMethod: t.payment_method,
+    currentInstallment: t.current_installment
+  }));
+  res.json(mapped);
 });
 
-app.post("/api/transactions", authenticateToken, (req: any, res) => {
+app.post("/api/transactions", authenticateToken, async (req: any, res) => {
   const { date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment } = req.body;
   
   if (paymentMethod === 'Cartão de Crédito' && installments && installments > 1 && !currentInstallment) {
     const baseAmount = amount / installments;
     const startDate = new Date(date);
-    const insert = db.prepare("INSERT INTO transactions (id, userId, date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    const transactionsToInsert = [];
     
     for (let i = 0; i < installments; i++) {
       const installmentDate = new Date(startDate);
       installmentDate.setMonth(startDate.getMonth() + i);
-      const id = uuidv4();
-      insert.run(
-        id, 
-        req.user.id, 
-        installmentDate.toISOString().split('T')[0], 
-        `${description} (${i + 1}/${installments})`, 
-        baseAmount, 
-        type, 
-        category, 
-        provider, 
-        paymentMethod, 
-        installments, 
-        i + 1
-      );
+      transactionsToInsert.push({
+        id: uuidv4(),
+        user_id: req.user.id,
+        date: installmentDate.toISOString().split('T')[0],
+        description: `${description} (${i + 1}/${installments})`,
+        amount: baseAmount,
+        type,
+        category,
+        provider,
+        payment_method: paymentMethod,
+        installments,
+        current_installment: i + 1
+      });
     }
+    const { error } = await supabase.from("transactions").insert(transactionsToInsert);
+    if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   } else {
     const id = uuidv4();
-    db.prepare("INSERT INTO transactions (id, userId, date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(id, req.user.id, date, description, amount, type, category, provider, paymentMethod, installments || null, currentInstallment || null);
+    const { error } = await supabase
+      .from("transactions")
+      .insert({
+        id,
+        user_id: req.user.id,
+        date,
+        description,
+        amount,
+        type,
+        category,
+        provider,
+        payment_method: paymentMethod,
+        installments: installments || null,
+        current_installment: currentInstallment || null
+      });
+    if (error) return res.status(500).json({ error: error.message });
     res.json({ id });
   }
 });
 
 // Events
-app.get("/api/events", authenticateToken, (req: any, res) => {
-  const events = db.prepare("SELECT * FROM events WHERE userId = ?").all(req.user.id);
-  res.json(events);
+app.get("/api/events", authenticateToken, async (req: any, res) => {
+  const { data: events, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  
+  const mapped = (events || []).map(e => ({
+    ...e,
+    userId: e.user_id,
+    start: e.start_time,
+    end: e.end_time
+  }));
+  res.json(mapped);
 });
 
-app.post("/api/events", authenticateToken, (req: any, res) => {
+app.post("/api/events", authenticateToken, async (req: any, res) => {
   const { title, start, end, description, location, type } = req.body;
   const id = uuidv4();
-  db.prepare("INSERT INTO events (id, userId, title, start, end, description, location, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, req.user.id, title, start, end, description, location, type);
+  const { error } = await supabase
+    .from("events")
+    .insert({
+      id,
+      user_id: req.user.id,
+      title,
+      start_time: start,
+      end_time: end,
+      description,
+      location,
+      type
+    });
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ id });
 });
 
-app.delete("/api/events/:id", authenticateToken, (req: any, res) => {
-  db.prepare("DELETE FROM events WHERE id = ? AND userId = ?").run(req.params.id, req.user.id);
+app.delete("/api/events/:id", authenticateToken, async (req: any, res) => {
+  const { error } = await supabase
+    .from("events")
+    .delete()
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
 // Leads
-app.get("/api/leads", authenticateToken, (req: any, res) => {
-  const leads = db.prepare("SELECT * FROM leads WHERE userId = ?").all(req.user.id) as any[];
-  const mappedLeads = leads.map(l => ({
+app.get("/api/leads", authenticateToken, async (req: any, res) => {
+  const { data: leads, error } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const mappedLeads = (leads || []).map(l => ({
     id: l.id,
     name: l.name,
     industry: l.industry,
     description: l.description,
-    generatedAt: l.generatedAt,
+    generatedAt: l.generated_at,
     contact: {
       instagram: l.instagram,
       email: l.email
@@ -283,12 +334,21 @@ app.get("/api/leads", authenticateToken, (req: any, res) => {
   res.json(mappedLeads);
 });
 
-app.post("/api/leads", authenticateToken, (req: any, res) => {
+app.post("/api/leads", authenticateToken, async (req: any, res) => {
   const leads = req.body;
-  const insertLead = db.prepare("INSERT INTO leads (id, userId, name, industry, instagram, email, description, generatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-  leads.forEach((l: any) => {
-    insertLead.run(uuidv4(), req.user.id, l.name, l.industry, l.contact?.instagram || l.instagram, l.contact?.email || l.email, l.description, l.generatedAt);
-  });
+  const leadsToInsert = leads.map((l: any) => ({
+    id: uuidv4(),
+    user_id: req.user.id,
+    name: l.name,
+    industry: l.industry,
+    instagram: l.contact?.instagram || l.instagram,
+    email: l.contact?.email || l.email,
+    description: l.description,
+    generated_at: l.generatedAt
+  }));
+  
+  const { error } = await supabase.from("leads").insert(leadsToInsert);
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
@@ -306,6 +366,11 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
+
