@@ -104,8 +104,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [user, setUser] = useState<{ id: string; email: string; name: string } | null>(() => {
-    const saved = localStorage.getItem('aurora_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('aurora_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
   });
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem('aurora_token');
@@ -122,26 +126,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const fetchData = async () => {
     try {
+      if (!token) return;
+      
       const headers = { 'Authorization': `Bearer ${token}` };
+      const fetchJson = async (url: string) => {
+        const res = await fetch(url, { headers });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      };
+
       const [projects, transactions, events, leads] = await Promise.all([
-        fetch('/api/projects', { headers }).then(res => res.json()),
-        fetch('/api/transactions', { headers }).then(res => res.json()),
-        fetch('/api/events', { headers }).then(res => res.json()),
-        fetch('/api/leads', { headers }).then(res => res.json()),
+        fetchJson('/api/projects'),
+        fetchJson('/api/transactions'),
+        fetchJson('/api/events'),
+        fetchJson('/api/leads'),
       ]);
 
       setState(prev => ({
         ...prev,
-        projects: projects || [],
-        transactions: transactions || [],
-        events: events || [],
-        leads: leads || [],
+        projects: Array.isArray(projects) ? projects : [],
+        transactions: Array.isArray(transactions) ? transactions : [],
+        events: Array.isArray(events) ? events : [],
+        leads: Array.isArray(leads) ? leads : [],
       }));
     } catch (err) {
       console.error('Failed to fetch data', err);
-      if (err instanceof Error && err.message.includes('401')) {
-        logout();
-      }
     }
   };
 

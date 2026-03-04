@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -18,6 +17,10 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(express.json());
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", env: process.env.NODE_ENV });
+});
 
 // Auth Middleware
 const authenticateToken = (req: any, res: any, next: any) => {
@@ -132,7 +135,6 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   const { id } = req.params;
   const updates = { ...req.body };
   
-  // Map frontend fields to DB fields
   const dbUpdates: any = {};
   if (updates.name) dbUpdates.name = updates.name;
   if (updates.clientName) dbUpdates.client_name = updates.clientName;
@@ -204,7 +206,6 @@ app.get("/api/transactions", authenticateToken, async (req: any, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   
-  // Map back to frontend camelCase
   const mapped = (transactions || []).map(t => ({
     ...t,
     userId: t.user_id,
@@ -354,23 +355,16 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
 
 // Vite middleware for development
 if (process.env.NODE_ENV !== "production") {
+  const { createServer: createViteServer } = await import("vite");
   const vite = await createViteServer({
     server: { middlewareMode: true },
     appType: "spa",
   });
   app.use(vite.middlewares);
-} else {
-  app.use(express.static("dist"));
-  app.get("*", (req, res) => {
-    res.sendFile("dist/index.html", { root: "." });
-  });
-}
-
-if (process.env.NODE_ENV !== "production") {
+  
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
 export default app;
-
