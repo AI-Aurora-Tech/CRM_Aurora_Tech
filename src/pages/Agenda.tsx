@@ -148,7 +148,7 @@ END:VCALENDAR`;
         {/* Days Grid */}
         <div className="grid grid-cols-7 flex-1 auto-rows-fr">
           {displayedDays.map((day, dayIdx) => {
-            const dayEvents = events.filter(e => isSameDay(new Date(e.start), day));
+            const dayEvents = (events || []).filter(e => isSameDay(new Date(e.start), day));
             const isToday = isSameDay(day, new Date());
             const isCurrentMonth = isSameMonth(day, currentDate);
 

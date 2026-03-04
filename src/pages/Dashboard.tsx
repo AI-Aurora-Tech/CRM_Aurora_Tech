@@ -5,17 +5,17 @@ import { ArrowUpRight, ArrowDownRight, Briefcase, Calendar, DollarSign } from 'l
 import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
-  const { projects, transactions, events } = useApp();
+  const { projects, transactions, events, user } = useApp();
 
-  const totalProjects = projects.length;
-  const activeProjects = projects.filter(p => p.status === 'Em Andamento').length;
+  const totalProjects = (projects || []).length;
+  const activeProjects = (projects || []).filter(p => p.status === 'Em Andamento').length;
   
-  const income = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-  const expenses = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+  const income = (transactions || []).filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+  const expenses = (transactions || []).filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = income - expenses;
 
   const today = new Date();
-  const todaysEvents = events.filter(e => {
+  const todaysEvents = (events || []).filter(e => {
     const eventDate = new Date(e.start);
     return eventDate.getDate() === today.getDate() &&
            eventDate.getMonth() === today.getMonth() &&
@@ -26,7 +26,7 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 mt-2">Bem-vindo de volta, Pedro Santos. Aqui está o resumo de hoje.</p>
+        <p className="text-slate-500 mt-2">Bem-vindo de volta, {user?.name || 'Pedro Santos'}. Aqui está o resumo de hoje.</p>
       </div>
 
       {/* Stats Grid */}
@@ -106,7 +106,7 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="p-6 space-y-6">
-            {projects.slice(0, 3).map(project => (
+            {(projects || []).slice(0, 3).map(project => (
               <div key={project.id} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-slate-900">{project.name}</span>

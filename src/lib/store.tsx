@@ -71,15 +71,20 @@ interface AppState {
 }
 
 interface AppContextType extends AppState {
-  addProject: (project: Omit<Project, 'id'>) => void;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  deleteProject: (id: string) => void;
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
-  addEvent: (event: Omit<Event, 'id'>) => void;
-  deleteEvent: (id: string) => void;
-  addLeads: (leads: Lead[]) => void;
-  toggleTask: (projectId: string, taskId: string) => void;
-  addTask: (projectId: string, task: Omit<Task, 'id'>) => void;
+  user: { id: string; email: string; name: string } | null;
+  token: string | null;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  changePassword: (newPassword: string) => Promise<boolean>;
+  addProject: (project: Omit<Project, 'id'>) => Promise<void>;
+  updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
+  addTransaction: (transaction: Omit<Transaction, 'id'>) => Promise<void>;
+  addEvent: (event: Omit<Event, 'id'>) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
+  addLeads: (leads: Lead[]) => Promise<void>;
+  toggleTask: (projectId: string, taskId: string) => Promise<void>;
+  addTask: (projectId: string, task: Omit<Task, 'id'>) => Promise<void>;
 }
 
 // --- Initial Mock Data ---
@@ -87,72 +92,9 @@ interface AppContextType extends AppState {
 const INITIAL_STATE: AppState = {
   partners: ['Você', 'Alex', 'Sara', 'Miguel'],
   leads: [],
-  projects: [
-    {
-      id: '1',
-      name: 'Campanha de Marketing Q3',
-      clientName: 'Alpha Corp',
-      description: 'Lançamento da nova linha de produtos nas redes sociais.',
-      status: 'Em Andamento',
-      dueDate: '2024-11-15',
-      assignedTo: ['Alex', 'Sara'],
-      progress: 65,
-      value: 5000,
-      tasks: [
-        { id: 't1', title: 'Definir público-alvo', completed: true, type: 'done' },
-        { id: 't2', title: 'Criar artes', completed: false, type: 'pending' },
-      ],
-    },
-    {
-      id: '2',
-      name: 'Redesign do App Mobile',
-      clientName: 'Beta Tech',
-      description: 'Reformulação de UX/UI para o aplicativo do cliente.',
-      status: 'Planejamento',
-      dueDate: '2024-12-01',
-      assignedTo: ['Miguel'],
-      progress: 15,
-      value: 12000,
-      tasks: [],
-    },
-    {
-      id: '3',
-      name: 'Migração de Servidor',
-      clientName: 'Interno',
-      description: 'Mover infraestrutura para AWS.',
-      status: 'Concluído',
-      dueDate: '2024-10-01',
-      assignedTo: ['Você', 'Miguel'],
-      progress: 100,
-      value: 0,
-      tasks: [],
-    },
-  ],
-  transactions: [
-    { id: '1', date: '2024-10-25', description: 'Pagamento Cliente - Alpha Corp', amount: 15000, type: 'income', category: 'Vendas', provider: 'Alpha Corp', paymentMethod: 'PIX' },
-    { id: '2', date: '2024-10-26', description: 'Hospedagem AWS', amount: 450, type: 'expense', category: 'Infraestrutura', provider: 'Amazon', paymentMethod: 'Cartão de Crédito' },
-    { id: '3', date: '2024-10-27', description: 'Aluguel Escritório', amount: 2000, type: 'expense', category: 'Operacional', provider: 'Imobiliária', paymentMethod: 'Boleto' },
-    { id: '4', date: '2024-10-28', description: 'Consultoria', amount: 5000, type: 'income', category: 'Serviços', provider: 'Gama Inc', paymentMethod: 'PIX' },
-    { id: '5', date: '2024-10-29', description: 'Licenças de Software', amount: 1200, type: 'expense', category: 'Software', provider: 'Microsoft', paymentMethod: 'Cartão de Crédito' },
-  ],
-  events: [
-    {
-      id: '1',
-      title: 'Reunião Semanal Sócios',
-      start: new Date(new Date().setHours(10, 0, 0, 0)).toISOString(),
-      end: new Date(new Date().setHours(11, 30, 0, 0)).toISOString(),
-      type: 'meeting',
-      description: 'Revisão de status de projetos e financeiro.',
-    },
-    {
-      id: '2',
-      title: 'Almoço com Cliente',
-      start: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(), // Tomorrow
-      end: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(),
-      type: 'work',
-      location: 'Bistrô Central',
-    },
-  ],
+  projects: [],
+  transactions: [],
+  events: [],
 };
 
 // --- Context ---
@@ -160,109 +102,207 @@ const INITIAL_STATE: AppState = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  // Load from localStorage or use initial state
-  const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('nexus_app_state');
-    return saved ? JSON.parse(saved) : INITIAL_STATE;
+  const [state, setState] = useState<AppState>(INITIAL_STATE);
+  const [user, setUser] = useState<{ id: string; email: string; name: string } | null>(() => {
+    const saved = localStorage.getItem('aurora_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem('aurora_token');
   });
 
+  // Fetch data when token changes
   useEffect(() => {
-    localStorage.setItem('nexus_app_state', JSON.stringify(state));
-  }, [state]);
-
-  const addProject = (project: Omit<Project, 'id'>) => {
-    setState(prev => ({ ...prev, projects: [...prev.projects, { ...project, id: uuidv4() }] }));
-  };
-
-  const updateProject = (id: string, updates: Partial<Project>) => {
-    setState(prev => ({
-      ...prev,
-      projects: prev.projects.map(p => (p.id === id ? { ...p, ...updates } : p)),
-    }));
-  };
-
-  const deleteProject = (id: string) => {
-    setState(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id) }));
-  };
-
-  const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
-    if (transaction.paymentMethod === 'Cartão de Crédito' && transaction.installments && transaction.installments > 1) {
-      const newTransactions: Transaction[] = [];
-      const baseAmount = transaction.amount / transaction.installments;
-      const startDate = new Date(transaction.date);
-
-      for (let i = 0; i < transaction.installments; i++) {
-        const installmentDate = new Date(startDate);
-        installmentDate.setMonth(startDate.getMonth() + i);
-        
-        newTransactions.push({
-          ...transaction,
-          id: uuidv4(),
-          amount: baseAmount,
-          date: installmentDate.toISOString().split('T')[0],
-          description: `${transaction.description} (${i + 1}/${transaction.installments})`,
-          currentInstallment: i + 1,
-        });
-      }
-      setState(prev => ({ ...prev, transactions: [...prev.transactions, ...newTransactions] }));
+    if (token) {
+      fetchData();
     } else {
-      setState(prev => ({ ...prev, transactions: [...prev.transactions, { ...transaction, id: uuidv4() }] }));
+      setState(INITIAL_STATE);
+    }
+  }, [token]);
+
+  const fetchData = async () => {
+    try {
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const [projects, transactions, events, leads] = await Promise.all([
+        fetch('/api/projects', { headers }).then(res => res.json()),
+        fetch('/api/transactions', { headers }).then(res => res.json()),
+        fetch('/api/events', { headers }).then(res => res.json()),
+        fetch('/api/leads', { headers }).then(res => res.json()),
+      ]);
+
+      setState(prev => ({
+        ...prev,
+        projects: projects || [],
+        transactions: transactions || [],
+        events: events || [],
+        leads: leads || [],
+      }));
+    } catch (err) {
+      console.error('Failed to fetch data', err);
+      if (err instanceof Error && err.message.includes('401')) {
+        logout();
+      }
     }
   };
 
-  const toggleTask = (projectId: string, taskId: string) => {
-    setState(prev => ({
-      ...prev,
-      projects: prev.projects.map(p => {
-        if (p.id === projectId) {
-          const updatedTasks = p.tasks.map(t => 
-            t.id === taskId ? { ...t, completed: !t.completed } : t
-          );
-          // Recalculate progress
-          const completedCount = updatedTasks.filter(t => t.completed).length;
-          const progress = updatedTasks.length > 0 ? Math.round((completedCount / updatedTasks.length) * 100) : p.progress;
-          return { ...p, tasks: updatedTasks, progress };
-        }
-        return p;
-      })
-    }));
+  const login = async (email: string, password: string) => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await res.json();
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('aurora_token', data.token);
+      localStorage.setItem('aurora_user', JSON.stringify(data.user));
+      return true;
+    } catch (err) {
+      return false;
+    }
   };
 
-  const addTask = (projectId: string, task: Omit<Task, 'id'>) => {
-    setState(prev => ({
-      ...prev,
-      projects: prev.projects.map(p => {
-        if (p.id === projectId) {
-          const updatedTasks = [...p.tasks, { ...task, id: uuidv4() }];
-          const completedCount = updatedTasks.filter(t => t.completed).length;
-          const progress = updatedTasks.length > 0 ? Math.round((completedCount / updatedTasks.length) * 100) : p.progress;
-          return { ...p, tasks: updatedTasks, progress };
-        }
-        return p;
-      })
-    }));
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('aurora_token');
+    localStorage.removeItem('aurora_user');
   };
 
-  const addEvent = (event: Omit<Event, 'id'>) => {
-    setState(prev => ({ ...prev, events: [...prev.events, { ...event, id: uuidv4() }] }));
+  const changePassword = async (newPassword: string) => {
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ newPassword }),
+      });
+      return res.ok;
+    } catch (err) {
+      return false;
+    }
   };
 
-  const deleteEvent = (id: string) => {
-    setState(prev => ({ ...prev, events: prev.events.filter(e => e.id !== id) }));
-  };
-
-  const addLeads = (newLeads: Lead[]) => {
-    setState(prev => {
-      const existingNames = new Set(prev.leads.map(l => l.name.toLowerCase()));
-      const filteredNewLeads = newLeads.filter(l => !existingNames.has(l.name.toLowerCase()));
-      return { ...prev, leads: [...prev.leads, ...filteredNewLeads] };
+  const addProject = async (project: Omit<Project, 'id'>) => {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(project),
     });
+    if (res.ok) fetchData();
+  };
+
+  const updateProject = async (id: string, updates: Partial<Project>) => {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) fetchData();
+  };
+
+  const deleteProject = async (id: string) => {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (res.ok) fetchData();
+  };
+
+  const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
+    const res = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(transaction),
+    });
+    if (res.ok) fetchData();
+  };
+
+  const toggleTask = async (projectId: string, taskId: string) => {
+    const project = state.projects.find(p => p.id === projectId);
+    if (!project) return;
+    const task = project.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ completed: !task.completed }),
+    });
+    if (res.ok) fetchData();
+  };
+
+  const addTask = async (projectId: string, task: Omit<Task, 'id'>) => {
+    const res = await fetch(`/api/projects/${projectId}/tasks`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(task),
+    });
+    if (res.ok) fetchData();
+  };
+
+  const addEvent = async (event: Omit<Event, 'id'>) => {
+    const res = await fetch('/api/events', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(event),
+    });
+    if (res.ok) fetchData();
+  };
+
+  const deleteEvent = async (id: string) => {
+    const res = await fetch(`/api/events/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (res.ok) fetchData();
+  };
+
+  const addLeads = async (newLeads: Lead[]) => {
+    const res = await fetch('/api/leads', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(newLeads),
+    });
+    if (res.ok) fetchData();
   };
 
   return (
     <AppContext.Provider
       value={{
         ...state,
+        user,
+        token,
+        login,
+        logout,
+        changePassword,
         addProject,
         updateProject,
         deleteProject,
