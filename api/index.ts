@@ -200,6 +200,8 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
   const { name, clientName, description, status, dueDate, progress, value, tasks, assignedTo } = req.body;
   const projectId = uuidv4();
   
+  console.log("Tentando criar projeto:", { name, clientName, projectId, userId: req.user.id });
+
   const { error: pError } = await supabase
     .from("projects")
     .insert({
@@ -215,18 +217,29 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
       assigned_to: JSON.stringify(assignedTo || [])
     });
 
-  if (pError) return res.status(500).json({ error: pError.message });
+  if (pError) {
+    console.error("Erro ao inserir projeto no Supabase:", pError);
+    return res.status(500).json({ error: pError.message });
+  }
   
-  if (tasks && Array.isArray(tasks)) {
+  if (tasks && Array.isArray(tasks) && tasks.length > 0) {
+    console.log(`Inserindo ${tasks.length} tarefas para o projeto ${projectId}`);
     const tasksToInsert = tasks.map(t => ({
       id: uuidv4(),
       project_id: projectId,
       title: t.title,
-      completed: t.completed ? 1 : 0,
+      completed: !!t.completed, // Usar booleano real
       type: t.type
     }));
-    await supabase.from("tasks").insert(tasksToInsert);
+    const { error: tError } = await supabase.from("tasks").insert(tasksToInsert);
+    if (tError) {
+      console.error("Erro ao inserir tarefas no Supabase:", tError);
+      // Não retornamos erro 500 aqui para não invalidar o projeto já criado, 
+      // mas logamos para depuração.
+    }
   }
+  
+  console.log("Projeto criado com sucesso:", projectId);
   res.json({ id: projectId });
 });
 
@@ -289,7 +302,7 @@ app.patch("/api/tasks/:id", authenticateToken, async (req: any, res) => {
   const { completed } = req.body;
   const { error } = await supabase
     .from("tasks")
-    .update({ completed: completed ? 1 : 0 })
+    .update({ completed: !!completed })
     .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });

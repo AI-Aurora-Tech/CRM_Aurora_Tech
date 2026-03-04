@@ -55,8 +55,11 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
       description: l.description,
       generatedAt: date,
     }));
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message?.includes("429") || error.status === "RESOURCE_EXHAUSTED" || error.message?.includes("quota")) {
+      throw new Error("Limite de cota do Gemini atingido. O plano gratuito tem limites de uso. Por favor, aguarde alguns minutos antes de tentar novamente.");
+    }
     console.error("Erro ao gerar leads:", error);
-    return [];
+    throw error;
   }
 }

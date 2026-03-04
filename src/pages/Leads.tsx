@@ -3,7 +3,7 @@ import { useApp } from '../lib/store';
 import { generateDailyLeads } from '../lib/leadService';
 import { format, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Search, Instagram, Mail, Building2, Loader2, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Instagram, Mail, Building2, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Leads() {
@@ -11,6 +11,7 @@ export default function Leads() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const dateKey = format(selectedDate, 'yyyy-MM-dd');
   const todaysLeads = leads.filter(l => l.generatedAt === dateKey);
@@ -28,11 +29,14 @@ export default function Leads() {
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setError(null);
     try {
       const newLeads = await generateDailyLeads(dateKey);
       if (newLeads.length > 0) {
         addLeads(newLeads);
       }
+    } catch (err: any) {
+      setError(err.message || "Ocorreu um erro ao gerar leads.");
     } finally {
       setIsGenerating(false);
     }
@@ -68,6 +72,13 @@ export default function Leads() {
           )}
         </button>
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-700 text-sm">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <p>{error}</p>
+        </div>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-12">
         {/* Calendar Sidebar */}
