@@ -2,10 +2,14 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Lead } from "./store";
 import { v4 as uuidv4 } from 'uuid';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 export async function generateDailyLeads(date: string): Promise<Lead[]> {
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY não está configurada no ambiente.");
+      return [];
+    }
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere uma lista de 10 empresas brasileiras (leads) para o dia ${date} que atendam aos seguintes critérios:
