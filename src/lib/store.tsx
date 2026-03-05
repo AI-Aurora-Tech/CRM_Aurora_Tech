@@ -218,25 +218,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
-    const res = await fetch(`/api/projects/${id}`, {
-      method: 'PATCH',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) throw new Error('Falha ao atualizar projeto');
-    fetchData();
+    // Optimistic update
+    setState(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => p.id === id ? { ...p, ...updates } : p)
+    }));
+
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar projeto');
+    } catch (error) {
+      console.error(error);
+      // Revert or re-fetch on error
+    } finally {
+      fetchData();
+    }
   };
 
   const deleteProject = async (id: string) => {
-    const res = await fetch(`/api/projects/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error('Falha ao deletar projeto');
-    fetchData();
+    // Optimistic update
+    setState(prev => ({
+      ...prev,
+      projects: prev.projects.filter(p => p.id !== id)
+    }));
+
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao deletar projeto');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+    }
   };
 
   const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
@@ -253,37 +276,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleTask = async (projectId: string, taskId: string) => {
-    const project = state.projects.find(p => p.id === projectId);
-    if (!project) return;
-    const task = project.tasks.find(t => t.id === taskId);
-    if (!task) return;
+    // Optimistic update
+    setState(prev => {
+      const newProjects = prev.projects.map(p => {
+        if (p.id !== projectId) return p;
+        const newTasks = p.tasks.map(t => {
+          if (t.id !== taskId) return t;
+          const newCompleted = !t.completed;
+          return { ...t, completed: newCompleted, type: newCompleted ? 'done' : 'pending' } as Task;
+        });
+        
+        // Recalculate progress
+        const totalTasks = newTasks.length;
+        const completedTasks = newTasks.filter(t => t.completed).length;
+        const newProgress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
-    const newCompleted = !task.completed;
-    const newType = newCompleted ? 'done' : 'pending';
-
-    const res = await fetch(`/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ completed: newCompleted, type: newType }),
+        return { ...p, tasks: newTasks, progress: newProgress };
+      });
+      return { ...prev, projects: newProjects };
     });
-    if (!res.ok) throw new Error('Falha ao atualizar tarefa');
-    fetchData();
+
+    try {
+      const project = state.projects.find(p => p.id === projectId);
+      if (!project) return;
+      const task = project.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const newCompleted = !task.completed;
+      const newType = newCompleted ? 'done' : 'pending';
+
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ completed: newCompleted, type: newType }),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar tarefa');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      fetchData();
+    }
   };
 
   const addTask = async (projectId: string, task: Omit<Task, 'id'>) => {
-    const res = await fetch(`/api/projects/${projectId}/tasks`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(task),
+    // Optimistic update with temporary ID
+    const tempId = uuidv4();
+    const newTask: Task = { ...task, id: tempId, completed: false, type: 'pending' };
+
+    setState(prev => {
+      const newProjects = prev.projects.map(p => {
+        if (p.id !== projectId) return p;
+        const newTasks = [...p.tasks, newTask];
+        
+        // Recalculate progress
+        const totalTasks = newTasks.length;
+        const completedTasks = newTasks.filter(t => t.completed).length;
+        const newProgress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+        return { ...p, tasks: newTasks, progress: newProgress };
+      });
+      return { ...prev, projects: newProjects };
     });
-    if (!res.ok) throw new Error('Falha ao adicionar tarefa');
-    fetchData();
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(task),
+      });
+      if (!res.ok) throw new Error('Falha ao adicionar tarefa');
+    } catch (error) {
+      console.error(error);
+      // Remove optimistic task on error
+      setState(prev => ({
+        ...prev,
+        projects: prev.projects.map(p => {
+          if (p.id !== projectId) return p;
+          return { ...p, tasks: p.tasks.filter(t => t.id !== tempId) };
+        })
+      }));
+    } finally {
+      fetchData();
+    }
   };
 
   const addEvent = async (event: Omit<Event, 'id'>) => {

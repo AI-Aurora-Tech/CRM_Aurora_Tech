@@ -4,8 +4,8 @@ import { Lead } from "./store";
 import { v4 as uuidv4 } from 'uuid';
 
 export async function generateDailyLeads(date: string): Promise<Lead[]> {
-  const openAIKey = process.env.OPENAI_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const openAIKey = import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
   if (openAIKey) {
     try {

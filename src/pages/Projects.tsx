@@ -15,9 +15,11 @@ export default function Projects() {
   const { projects, addProject, updateProject, toggleTask, addTask } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskType, setNewTaskType] = useState<Task['type']>('pending');
+
+  const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
 
   const columns: ProjectStatus[] = ['Planejamento', 'Em Andamento', 'Revisão', 'Concluído'];
 
@@ -110,7 +112,7 @@ export default function Projects() {
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
                                 className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow group cursor-pointer"
-                                onClick={() => setSelectedProject(project)}
+                                onClick={() => setSelectedProjectId(project.id)}
                               >
                                 <div className="flex justify-between items-start mb-2">
                                   <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider", STATUS_CONFIG[project.status].color)}>
@@ -167,7 +169,7 @@ export default function Projects() {
                 <h3 className="text-xl font-bold text-slate-900">{selectedProject.name}</h3>
                 <p className="text-sm text-slate-500">{selectedProject.clientName}</p>
               </div>
-              <button onClick={() => setSelectedProject(null)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setSelectedProjectId(null)} className="text-slate-400 hover:text-slate-600">
                 <Plus className="h-6 w-6 rotate-45" />
               </button>
             </div>
