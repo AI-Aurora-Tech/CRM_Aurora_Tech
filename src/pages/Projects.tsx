@@ -14,11 +14,37 @@ const STATUS_CONFIG: Record<ProjectStatus, { color: string; icon: any }> = {
 export default function Projects() {
   const { projects, addProject, updateProject, toggleTask, addTask } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskType, setNewTaskType] = useState<Task['type']>('pending');
 
   const columns: ProjectStatus[] = ['Planejamento', 'Em Andamento', 'Revisão', 'Concluído'];
+
+  const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsCreating(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      await addProject({
+        name: formData.get('name') as string,
+        clientName: formData.get('clientName') as string,
+        description: formData.get('description') as string,
+        status: 'Planejamento',
+        dueDate: formData.get('dueDate') as string,
+        assignedTo: ['Você'],
+        progress: 0,
+        value: Number(formData.get('value')),
+        tasks: [],
+      });
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao criar projeto:", error);
+      alert("Erro ao criar projeto. Verifique o console para mais detalhes.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   const onDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -104,9 +130,9 @@ export default function Projects() {
                                     <CheckSquare className="mr-1 h-3 w-3" />
                                     {(project.tasks || []).filter(t => t.completed).length}/{(project.tasks || []).length} Tarefas
                                   </div>
-                                  <div className="flex items-center text-xs text-slate-400">
-                                    <Clock className="mr-1 h-3 w-3" />
-                                    {new Date(project.dueDate).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' })}
+                                  <div className="flex items-center text-xs text-indigo-600 font-medium hover:underline">
+                                    Gerenciar
+                                    <ChevronRight className="ml-0.5 h-3 w-3" />
                                   </div>
                                 </div>
                                 
@@ -226,22 +252,7 @@ export default function Projects() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4">Novo Projeto</h3>
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                addProject({
-                  name: formData.get('name') as string,
-                  clientName: formData.get('clientName') as string,
-                  description: formData.get('description') as string,
-                  status: 'Planejamento',
-                  dueDate: formData.get('dueDate') as string,
-                  assignedTo: ['Você'],
-                  progress: 0,
-                  value: Number(formData.get('value')),
-                  tasks: [],
-                });
-                setIsModalOpen(false);
-              }}
+              onSubmit={handleCreateProject}
               className="space-y-4"
             >
               <div>
@@ -271,15 +282,24 @@ export default function Projects() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-md"
+                  disabled={isCreating}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-md disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                  disabled={isCreating}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                 >
-                  Criar Projeto
+                  {isCreating ? (
+                    <>
+                      <Clock className="mr-2 h-4 w-4 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    'Criar Projeto'
+                  )}
                 </button>
               </div>
             </form>

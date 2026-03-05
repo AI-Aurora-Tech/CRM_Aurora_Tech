@@ -1,15 +1,79 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import OpenAI from "openai";
 import { Lead } from "./store";
 import { v4 as uuidv4 } from 'uuid';
 
 export async function generateDailyLeads(date: string): Promise<Lead[]> {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error("GEMINI_API_KEY não está configurada no ambiente.");
-      return [];
+  const openAIKey = process.env.OPENAI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (openAIKey) {
+    try {
+      const openai = new OpenAI({ apiKey: openAIKey, dangerouslyAllowBrowser: true }); // Allow browser usage since this is client-side code in preview
+      
+      const completion = await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "Você é um assistente especializado em gerar leads B2B qualificados no Brasil. Retorne APENAS um JSON válido."
+          },
+          {
+            role: "user",
+            content: `Gere uma lista de 10 empresas brasileiras (leads) para o dia ${date} que atendam aos seguintes critérios:
+            1. Tenham Instagram e/ou e-mail registrado publicamente.
+            2. NÃO tenham site próprio ou aplicativo duplicado.
+            3. Sejam empresas de pequeno a médio porte.
+            4. Prioridade: Escolas (para venda de CRM), clínicas de estética e negócios de atendimento que precisam automatizar processos.
+            5. Localização: Brasil.
+            6. Retorne um JSON com a seguinte estrutura:
+            [
+              {
+                "name": "Nome da Empresa",
+                "industry": "Ramo de Atividade",
+                "instagram": "@instagram",
+                "email": "email@exemplo.com",
+                "description": "Por que é um bom lead"
+              }
+            ]`
+          }
+        ],
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+      });
+
+      const content = completion.choices[0].message.content;
+      if (!content) return [];
+
+      const parsed = JSON.parse(content);
+      const leads = Array.isArray(parsed) ? parsed : (parsed.leads || parsed.companies || []);
+
+      return leads.map((l: any) => ({
+        id: uuidv4(),
+        name: l.name,
+        industry: l.industry,
+        contact: {
+          instagram: l.instagram,
+          email: l.email,
+        },
+        description: l.description,
+        generatedAt: date,
+      }));
+
+    } catch (error) {
+      console.error("Erro ao gerar leads com OpenAI:", error);
+      // Fallback to Gemini if OpenAI fails? Or just throw.
+      // Let's try Gemini as fallback if key exists.
+      if (!geminiKey) throw error;
     }
-    const ai = new GoogleGenAI({ apiKey });
+  }
+
+  if (!geminiKey) {
+    console.error("Nenhuma chave de API (OpenAI ou Gemini) configurada.");
+    return [];
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: geminiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere uma lista de 10 empresas brasileiras (leads) para o dia ${date} que atendam aos seguintes critérios:
@@ -57,7 +121,7 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
     }));
   } catch (error: any) {
     if (error.message?.includes("429") || error.status === "RESOURCE_EXHAUSTED" || error.message?.includes("quota")) {
-      throw new Error("Limite de cota do Gemini atingido. O plano gratuito tem limites de uso. Por favor, aguarde alguns minutos antes de tentar novamente.");
+      throw new Error("Limite de cota do Gemini atingido. Configure sua chave da OpenAI no .env para evitar isso.");
     }
     console.error("Erro ao gerar leads:", error);
     throw error;

@@ -37,9 +37,8 @@ export default function Dashboard() {
             <DollarSign className="h-4 w-4 text-slate-400" />
           </div>
           <div className="text-2xl font-bold text-slate-900">R$ {(balance || 0).toLocaleString('pt-BR')}</div>
-          <div className="flex items-center pt-1 text-xs text-emerald-600">
-            <ArrowUpRight className="mr-1 h-3 w-3" />
-            <span className="font-medium">+12% desde o último mês</span>
+          <div className="flex items-center pt-1 text-xs text-slate-500">
+            <span className="font-medium">Saldo atual</span>
           </div>
         </div>
 
