@@ -38,9 +38,9 @@ export default function Projects() {
         tasks: [],
       });
       setIsModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao criar projeto:", error);
-      alert("Erro ao criar projeto. Verifique o console para mais detalhes.");
+      alert(`Erro ao criar projeto: ${error.message || "Erro desconhecido"}`);
     } finally {
       setIsCreating(false);
     }

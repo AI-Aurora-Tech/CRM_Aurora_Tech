@@ -210,7 +210,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       body: JSON.stringify(project),
     });
-    if (res.ok) fetchData();
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.error || 'Falha ao criar projeto');
+    }
+    fetchData();
   };
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
@@ -222,7 +226,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       body: JSON.stringify(updates),
     });
-    if (res.ok) fetchData();
+    if (!res.ok) throw new Error('Falha ao atualizar projeto');
+    fetchData();
   };
 
   const deleteProject = async (id: string) => {
@@ -230,7 +235,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    if (res.ok) fetchData();
+    if (!res.ok) throw new Error('Falha ao deletar projeto');
+    fetchData();
   };
 
   const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
@@ -242,7 +248,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       body: JSON.stringify(transaction),
     });
-    if (res.ok) fetchData();
+    if (!res.ok) throw new Error('Falha ao criar transação');
+    fetchData();
   };
 
   const toggleTask = async (projectId: string, taskId: string) => {
@@ -259,7 +266,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       body: JSON.stringify({ completed: !task.completed }),
     });
-    if (res.ok) fetchData();
+    if (!res.ok) throw new Error('Falha ao atualizar tarefa');
+    fetchData();
   };
 
   const addTask = async (projectId: string, task: Omit<Task, 'id'>) => {
@@ -271,7 +279,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       body: JSON.stringify(task),
     });
-    if (res.ok) fetchData();
+    if (!res.ok) throw new Error('Falha ao adicionar tarefa');
+    fetchData();
   };
 
   const addEvent = async (event: Omit<Event, 'id'>) => {

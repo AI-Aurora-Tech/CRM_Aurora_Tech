@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp, Transaction, PaymentMethod } from '../lib/store';
 import { TrendingUp, TrendingDown, DollarSign, Plus, Calendar, CreditCard, Wallet, ArrowUpRight, ArrowDownRight, Building2, Tag } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { cn } from '../lib/utils';
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, subMonths, isSameMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Finance() {
@@ -17,20 +17,52 @@ export default function Finance() {
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
-  // Chart Data
-  const monthlyData = [
-    { name: 'Jul', receitas: 12000, despesas: 8000 },
-    { name: 'Ago', receitas: 15000, despesas: 9500 },
-    { name: 'Set', receitas: 18000, despesas: 11000 },
-    { name: 'Out', receitas: totalIncome, despesas: totalExpense },
-  ];
+  // Chart Data - Real Calculation
+  const monthlyData = useMemo(() => {
+    const today = new Date();
+    // Generate last 6 months
+    const last6Months = Array.from({ length: 6 }, (_, i) => {
+      const d = subMonths(today, 5 - i);
+      return {
+        date: d,
+        name: format(d, 'MMM', { locale: ptBR }),
+        receitas: 0,
+        despesas: 0
+      };
+    });
 
-  const categoryData = [
-    { name: 'Operacional', value: 4000 },
-    { name: 'Software', value: 1200 },
-    { name: 'Marketing', value: 2500 },
-    { name: 'Infra', value: 800 },
-  ];
+    transactions.forEach(t => {
+      const tDate = parseISO(t.date);
+      const monthIndex = last6Months.findIndex(m => isSameMonth(m.date, tDate));
+      if (monthIndex !== -1) {
+        if (t.type === 'income') {
+          last6Months[monthIndex].receitas += t.amount;
+        } else {
+          last6Months[monthIndex].despesas += t.amount;
+        }
+      }
+    });
+
+    return last6Months.map(({ name, receitas, despesas }) => ({ name, receitas, despesas }));
+  }, [transactions]);
+
+  const categoryData = useMemo(() => {
+    const expenses = transactions.filter(t => t.type === 'expense');
+    const categories: Record<string, number> = {};
+
+    expenses.forEach(t => {
+      categories[t.category] = (categories[t.category] || 0) + t.amount;
+    });
+
+    const result = Object.entries(categories)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value); // Sort by highest expense
+      
+    // If no data, return placeholder to avoid empty chart
+    if (result.length === 0) return [{ name: 'Sem dados', value: 1 }];
+    
+    return result;
+  }, [transactions]);
 
   const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e'];
 
