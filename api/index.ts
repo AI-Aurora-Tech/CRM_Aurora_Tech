@@ -189,7 +189,7 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
       clientName: p.client_name,
       dueDate: p.due_date,
       tasks: (tasks || []).map((t: any) => ({ ...t, completed: !!t.completed })),
-      assignedTo: p.assigned_to ? JSON.parse(p.assigned_to) : []
+      assignedTo: ['Você'] // Default value since column is missing in DB
     };
   }));
   
@@ -197,7 +197,7 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
 });
 
 app.post("/api/projects", authenticateToken, async (req: any, res) => {
-  const { name, clientName, description, status, dueDate, progress, value, tasks, assignedTo } = req.body;
+  const { name, clientName, description, status, dueDate, progress, value, tasks } = req.body;
   const projectId = uuidv4();
   
   console.log("Tentando criar projeto:", { name, clientName, projectId, userId: req.user.id });
@@ -213,8 +213,8 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
       status,
       due_date: dueDate,
       progress: progress || 0,
-      value: value || 0,
-      assigned_to: JSON.stringify(assignedTo || [])
+      value: value || 0
+      // assigned_to removed as column does not exist
     });
 
   if (pError) {
@@ -255,7 +255,7 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   if (updates.dueDate) dbUpdates.due_date = updates.dueDate;
   if (updates.progress !== undefined) dbUpdates.progress = updates.progress;
   if (updates.value !== undefined) dbUpdates.value = updates.value;
-  if (updates.assignedTo) dbUpdates.assigned_to = JSON.stringify(updates.assignedTo);
+  // assigned_to removed as column does not exist
 
   const { error } = await supabase
     .from("projects")
