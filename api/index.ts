@@ -299,10 +299,14 @@ app.post("/api/projects/:projectId/tasks", authenticateToken, async (req: any, r
 });
 
 app.patch("/api/tasks/:id", authenticateToken, async (req: any, res) => {
-  const { completed } = req.body;
+  const { completed, type } = req.body;
+  const updates: any = {};
+  if (completed !== undefined) updates.completed = !!completed;
+  if (type !== undefined) updates.type = type;
+
   const { error } = await supabase
     .from("tasks")
-    .update({ completed: !!completed })
+    .update(updates)
     .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });

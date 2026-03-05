@@ -258,13 +258,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const task = project.tasks.find(t => t.id === taskId);
     if (!task) return;
 
+    const newCompleted = !task.completed;
+    const newType = newCompleted ? 'done' : 'pending';
+
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ completed: !task.completed }),
+      body: JSON.stringify({ completed: newCompleted, type: newType }),
     });
     if (!res.ok) throw new Error('Falha ao atualizar tarefa');
     fetchData();
