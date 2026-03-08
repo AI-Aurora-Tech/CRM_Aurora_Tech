@@ -1,20 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { useApp, Transaction, PaymentMethod } from '../lib/store';
-import { TrendingUp, TrendingDown, DollarSign, Plus, Calendar, CreditCard, Wallet, ArrowUpRight, ArrowDownRight, Building2, Tag } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Plus, Calendar, CreditCard, Wallet, ArrowUpRight, ArrowDownRight, Building2, Tag, Clock, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { cn } from '../lib/utils';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, subMonths, isSameMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Finance() {
-  const { transactions, addTransaction } = useApp();
+  const { transactions, addTransaction, updateTransaction, deleteTransaction } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [isInstallment, setIsInstallment] = useState(false);
+  const [transactionStatus, setTransactionStatus] = useState<'paid' | 'pending' | 'planned'>('paid');
 
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+  const activeTransactions = transactions.filter(t => t.status !== 'planned');
+  const totalIncome = activeTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+  const totalExpense = activeTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;
 
   // Chart Data - Real Calculation
@@ -31,7 +33,7 @@ export default function Finance() {
       };
     });
 
-    transactions.forEach(t => {
+    activeTransactions.forEach(t => {
       const tDate = parseISO(t.date);
       const monthIndex = last6Months.findIndex(m => isSameMonth(m.date, tDate));
       if (monthIndex !== -1) {
@@ -44,10 +46,10 @@ export default function Finance() {
     });
 
     return last6Months.map(({ name, receitas, despesas }) => ({ name, receitas, despesas }));
-  }, [transactions]);
+  }, [activeTransactions]);
 
   const categoryData = useMemo(() => {
-    const expenses = transactions.filter(t => t.type === 'expense');
+    const expenses = activeTransactions.filter(t => t.type === 'expense');
     const categories: Record<string, number> = {};
 
     expenses.forEach(t => {
@@ -62,9 +64,13 @@ export default function Finance() {
     if (result.length === 0) return [{ name: 'Sem dados', value: 1 }];
     
     return result;
-  }, [transactions]);
+  }, [activeTransactions]);
 
   const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e'];
+
+  const handleStatusChange = async (id: string, newStatus: 'paid' | 'pending' | 'planned') => {
+    await updateTransaction(id, { status: newStatus });
+  };
 
   return (
     <div className="space-y-8">
@@ -194,13 +200,15 @@ export default function Finance() {
                 <th className="px-6 py-4">Descrição</th>
                 <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4">Fornecedor</th>
+                <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Método</th>
                 <th className="px-6 py-4 text-right">Valor</th>
+                <th className="px-6 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={t.id} className={cn("hover:bg-slate-50/50 transition-colors", t.status === 'planned' && "opacity-60 bg-slate-50/30")}>
                   <td className="px-6 py-4 text-sm text-slate-600">
                     {format(parseISO(t.date), 'dd/MM/yyyy')}
                   </td>
@@ -223,6 +231,22 @@ export default function Finance() {
                   <td className="px-6 py-4 text-sm text-slate-600">
                     {t.provider}
                   </td>
+                  <td className="px-6 py-4">
+                    <select 
+                      value={t.status || 'paid'} 
+                      onChange={(e) => handleStatusChange(t.id, e.target.value as any)}
+                      className={cn(
+                        "text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer focus:ring-2 focus:ring-offset-1",
+                        t.status === 'paid' ? "bg-emerald-100 text-emerald-700" : 
+                        t.status === 'pending' ? "bg-amber-100 text-amber-700" : 
+                        "bg-slate-100 text-slate-700"
+                      )}
+                    >
+                      <option value="paid">Pago</option>
+                      <option value="pending">Pendente</option>
+                      <option value="planned">Standby</option>
+                    </select>
+                  </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
                     {t.paymentMethod}
                   </td>
@@ -231,6 +255,11 @@ export default function Finance() {
                     t.type === 'income' ? "text-emerald-600" : "text-rose-600"
                   )}>
                     {t.type === 'income' ? '+' : '-'} R$ {(t.amount || 0).toLocaleString('pt-BR')}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button onClick={() => deleteTransaction(t.id)} className="text-slate-400 hover:text-rose-600">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -266,6 +295,7 @@ export default function Finance() {
                   provider: formData.get('provider') as string,
                   paymentMethod: paymentMethod,
                   installments: paymentMethod === 'Cartão de Crédito' ? installments : 1,
+                  status: transactionStatus
                 });
                 setIsModalOpen(false);
               }}
@@ -291,6 +321,39 @@ export default function Finance() {
                   )}
                 >
                   Receita
+                </button>
+              </div>
+
+              <div className="flex gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setTransactionStatus('paid')}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-full border transition-colors",
+                    transactionStatus === 'paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-white text-slate-600 border-slate-200"
+                  )}
+                >
+                  <CheckCircle2 className="h-3 w-3 inline mr-1"/> Pago
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTransactionStatus('pending')}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-full border transition-colors",
+                    transactionStatus === 'pending' ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-white text-slate-600 border-slate-200"
+                  )}
+                >
+                  <Clock className="h-3 w-3 inline mr-1"/> Pendente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTransactionStatus('planned')}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-full border transition-colors",
+                    transactionStatus === 'planned' ? "bg-slate-100 text-slate-700 border-slate-300" : "bg-white text-slate-600 border-slate-200"
+                  )}
+                >
+                  <AlertCircle className="h-3 w-3 inline mr-1"/> Standby
                 </button>
               </div>
 

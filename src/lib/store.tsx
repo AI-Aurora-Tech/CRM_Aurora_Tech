@@ -35,6 +35,10 @@ export interface Project {
   progress: number;
   value: number;
   tasks: Task[];
+  paymentMethod?: string;
+  paymentDetails?: string;
+  implementationFee?: number;
+  monthlyFee?: number;
 }
 
 export type PaymentMethod = 'Boleto' | 'Cartão de Crédito' | 'Cartão de Débito' | 'PIX';
@@ -50,6 +54,7 @@ export interface Transaction {
   paymentMethod: PaymentMethod;
   installments?: number;
   currentInstallment?: number;
+  status?: 'paid' | 'pending' | 'standby';
 }
 
 export interface Event {
@@ -60,6 +65,8 @@ export interface Event {
   description?: string;
   location?: string;
   type: 'meeting' | 'work' | 'personal';
+  tag?: string;
+  color?: string;
 }
 
 interface AppState {
@@ -80,11 +87,16 @@ interface AppContextType extends AppState {
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   addTransaction: (transaction: Omit<Transaction, 'id'>) => Promise<void>;
+  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
   addEvent: (event: Omit<Event, 'id'>) => Promise<void>;
+  updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
   addLeads: (leads: Lead[]) => Promise<void>;
   toggleTask: (projectId: string, taskId: string) => Promise<void>;
   addTask: (projectId: string, task: Omit<Task, 'id'>) => Promise<void>;
+  updateTask: (projectId: string, taskId: string, updates: Partial<Task>) => Promise<void>;
+  deleteTask: (projectId: string, taskId: string) => Promise<void>;
 }
 
 // --- Initial Mock Data ---
@@ -275,6 +287,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     fetchData();
   };
 
+  const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+    setState(prev => ({
+      ...prev,
+      transactions: prev.transactions.map(t => t.id === id ? { ...t, ...updates } : t)
+    }));
+
+    try {
+      const res = await fetch(`/api/transactions/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar transação');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
+  };
+
+  const deleteTransaction = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      transactions: prev.transactions.filter(t => t.id !== id)
+    }));
+
+    try {
+      const res = await fetch(`/api/transactions/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao deletar transação');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
+  };
+
   const toggleTask = async (projectId: string, taskId: string) => {
     // Optimistic update
     setState(prev => {
@@ -366,6 +418,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateTask = async (projectId: string, taskId: string, updates: Partial<Task>) => {
+    setState(prev => {
+      const newProjects = prev.projects.map(p => {
+        if (p.id !== projectId) return p;
+        const newTasks = p.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t);
+        return { ...p, tasks: newTasks };
+      });
+      return { ...prev, projects: newProjects };
+    });
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar tarefa');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
+  };
+
+  const deleteTask = async (projectId: string, taskId: string) => {
+    setState(prev => {
+      const newProjects = prev.projects.map(p => {
+        if (p.id !== projectId) return p;
+        const newTasks = p.tasks.filter(t => t.id !== taskId);
+        
+        // Recalculate progress
+        const totalTasks = newTasks.length;
+        const completedTasks = newTasks.filter(t => t.completed).length;
+        const newProgress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+        return { ...p, tasks: newTasks, progress: newProgress };
+      });
+      return { ...prev, projects: newProjects };
+    });
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao deletar tarefa');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
+  };
+
   const addEvent = async (event: Omit<Event, 'id'>) => {
     const res = await fetch('/api/events', {
       method: 'POST',
@@ -376,6 +482,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify(event),
     });
     if (res.ok) fetchData();
+  };
+
+  const updateEvent = async (id: string, updates: Partial<Event>) => {
+    setState(prev => ({
+      ...prev,
+      events: prev.events.map(e => e.id === id ? { ...e, ...updates } : e)
+    }));
+
+    try {
+      const res = await fetch(`/api/events/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar evento');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
   };
 
   const deleteEvent = async (id: string) => {
@@ -411,11 +539,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateProject,
         deleteProject,
         addTransaction,
+        updateTransaction,
+        deleteTransaction,
         addEvent,
+        updateEvent,
         deleteEvent,
         addLeads,
         toggleTask,
         addTask,
+        updateTask,
+        deleteTask,
       }}
     >
       {children}

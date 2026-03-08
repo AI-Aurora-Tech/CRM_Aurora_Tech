@@ -1,14 +1,22 @@
 import React, { useState } from 'react';
 import { useApp, Event } from '../lib/store';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Plus, Download, Calendar as CalendarIcon, Smartphone } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+const EVENT_TAGS = [
+  { label: 'Reunião com Cliente', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  { label: 'Reunião Interna', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  { label: 'Tempo Off', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+  { label: 'Reunião de Projeto', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { label: 'Outro', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+];
+
 export default function Agenda() {
   const { events, addEvent } = useApp();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<'month' | 'week'>('month');
+  const [view, setView] = useState<'month' | 'week' | 'day'>('month');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
@@ -30,21 +38,25 @@ export default function Agenda() {
     end: weekEnd,
   });
 
-  const displayedDays = view === 'month' ? calendarDays : weekDays;
+  const displayedDays = view === 'month' ? calendarDays : view === 'week' ? weekDays : [currentDate];
 
   const nextPeriod = () => {
     if (view === 'month') {
       setCurrentDate(addMonths(currentDate, 1));
-    } else {
+    } else if (view === 'week') {
       setCurrentDate(addWeeks(currentDate, 1));
+    } else {
+      setCurrentDate(addDays(currentDate, 1));
     }
   };
 
   const prevPeriod = () => {
     if (view === 'month') {
       setCurrentDate(subMonths(currentDate, 1));
-    } else {
+    } else if (view === 'week') {
       setCurrentDate(subWeeks(currentDate, 1));
+    } else {
+      setCurrentDate(subDays(currentDate, 1));
     }
   };
 
@@ -80,38 +92,49 @@ END:VCALENDAR`;
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Agenda</h1>
           <p className="text-slate-500 mt-1">Gerencie sua agenda e sincronize com dispositivos.</p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 overflow-x-auto pb-2 sm:pb-0">
           <button
             onClick={() => setIsSyncModalOpen(true)}
-            className="inline-flex items-center px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors mr-2"
+            className="inline-flex items-center px-3 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors mr-2 whitespace-nowrap"
           >
             <Smartphone className="mr-2 h-4 w-4" />
-            Sincronizar iOS/Android
+            Sincronizar
           </button>
-          <button
-            onClick={() => setView('month')}
-            className={cn(
-              "px-3 py-2 text-sm font-medium rounded-lg transition-colors",
-              view === 'month' ? "bg-indigo-100 text-indigo-700" : "text-slate-600 hover:bg-slate-100"
-            )}
-          >
-            Mês
-          </button>
-          <button
-            onClick={() => setView('week')}
-            className={cn(
-              "px-3 py-2 text-sm font-medium rounded-lg transition-colors",
-              view === 'week' ? "bg-indigo-100 text-indigo-700" : "text-slate-600 hover:bg-slate-100"
-            )}
-          >
-            Semana
-          </button>
+          <div className="flex bg-slate-100 rounded-lg p-1">
+            <button
+              onClick={() => setView('month')}
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                view === 'month' ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              Mês
+            </button>
+            <button
+              onClick={() => setView('week')}
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                view === 'week' ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              Semana
+            </button>
+            <button
+              onClick={() => setView('day')}
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                view === 'day' ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              Dia
+            </button>
+          </div>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="ml-2 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="ml-2 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 whitespace-nowrap"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Novo Evento
+            Novo
           </button>
         </div>
       </div>
@@ -119,7 +142,10 @@ END:VCALENDAR`;
       {/* Calendar Controls */}
       <div className="flex items-center justify-between bg-white p-4 rounded-t-xl border border-slate-200 border-b-0">
         <h2 className="text-lg font-semibold text-slate-900 capitalize">
-          {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+          {view === 'day' 
+            ? format(currentDate, "d 'de' MMMM yyyy", { locale: ptBR })
+            : format(currentDate, 'MMMM yyyy', { locale: ptBR })
+          }
         </h2>
         <div className="flex items-center space-x-2">
           <button onClick={prevPeriod} className="p-2 hover:bg-slate-100 rounded-full text-slate-600">
@@ -137,18 +163,29 @@ END:VCALENDAR`;
       {/* Calendar Grid */}
       <div className="flex-1 bg-white rounded-b-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
         {/* Days Header */}
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
-            <div key={day} className="py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              {day}
+        <div className={cn("grid border-b border-slate-200 bg-slate-50", view === 'day' ? "grid-cols-1" : "grid-cols-7")}>
+          {view === 'day' ? (
+            <div className="py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              {format(currentDate, 'EEEE', { locale: ptBR })}
             </div>
-          ))}
+          ) : (
+            ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
+              <div key={day} className="py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                {day}
+              </div>
+            ))
+          )}
         </div>
 
         {/* Days Grid */}
-        <div className="grid grid-cols-7 flex-1 auto-rows-fr">
+        <div className={cn("grid flex-1 auto-rows-fr", view === 'day' ? "grid-cols-1" : "grid-cols-7")}>
           {displayedDays.map((day, dayIdx) => {
-            const dayEvents = (events || []).filter(e => isSameDay(new Date(e.start), day));
+            const dayEvents = (events || []).filter(e => {
+              const eventStart = startOfDay(new Date(e.start));
+              const eventEnd = endOfDay(new Date(e.end));
+              return isWithinInterval(day, { start: eventStart, end: eventEnd });
+            });
+            
             const isToday = isSameDay(day, new Date());
             const isCurrentMonth = isSameMonth(day, currentDate);
 
@@ -157,8 +194,8 @@ END:VCALENDAR`;
                 key={day.toString()}
                 className={cn(
                   "min-h-[100px] p-2 border-b border-r border-slate-100 relative group transition-colors hover:bg-slate-50",
-                  !isCurrentMonth && "bg-slate-50/50 text-slate-400",
-                  dayIdx % 7 === 6 && "border-r-0" // Remove right border for last column
+                  !isCurrentMonth && view === 'month' && "bg-slate-50/50 text-slate-400",
+                  (dayIdx % 7 === 6 || view === 'day') && "border-r-0" // Remove right border for last column
                 )}
               >
                 <div className="flex justify-between items-start">
@@ -173,17 +210,23 @@ END:VCALENDAR`;
                 </div>
                 
                 <div className="mt-2 space-y-1">
-                  {dayEvents.map(event => (
-                    <div
-                      key={event.id}
-                      className="group/event relative px-2 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-700 border border-indigo-100 truncate cursor-pointer hover:bg-indigo-100"
-                      onClick={() => handleExport(event)}
-                      title="Clique para exportar para o calendário"
-                    >
-                      {format(new Date(event.start), 'HH:mm')} {event.title}
-                      <Download className="absolute right-1 top-1 h-3 w-3 opacity-0 group-hover/event:opacity-100 text-indigo-500" />
-                    </div>
-                  ))}
+                  {dayEvents.map(event => {
+                    const tagStyle = EVENT_TAGS.find(t => t.label === event.tag)?.color || 'bg-indigo-50 text-indigo-700 border-indigo-100';
+                    return (
+                      <div
+                        key={event.id}
+                        className={cn(
+                          "group/event relative px-2 py-1 text-xs font-medium rounded border truncate cursor-pointer hover:opacity-90",
+                          tagStyle
+                        )}
+                        onClick={() => handleExport(event)}
+                        title={`${event.title} - ${event.tag || 'Evento'}`}
+                      >
+                        {format(new Date(event.start), 'HH:mm')} {event.title}
+                        <Download className="absolute right-1 top-1 h-3 w-3 opacity-0 group-hover/event:opacity-100" />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -191,7 +234,7 @@ END:VCALENDAR`;
         </div>
       </div>
 
-      {/* Add Event Modal (Simplified) */}
+      {/* Add Event Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
@@ -200,12 +243,17 @@ END:VCALENDAR`;
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const tagLabel = formData.get('tag') as string;
+                const tagColor = EVENT_TAGS.find(t => t.label === tagLabel)?.color;
+
                 addEvent({
                   title: formData.get('title') as string,
                   start: new Date(formData.get('start') as string).toISOString(),
                   end: new Date(formData.get('end') as string).toISOString(),
                   type: 'meeting',
                   description: formData.get('description') as string,
+                  tag: tagLabel,
+                  color: tagColor
                 });
                 setIsModalOpen(false);
               }}
@@ -224,6 +272,14 @@ END:VCALENDAR`;
                   <label className="block text-sm font-medium text-slate-700">Fim</label>
                   <input name="end" type="datetime-local" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Categoria (Tag)</label>
+                <select name="tag" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                  {EVENT_TAGS.map(tag => (
+                    <option key={tag.label} value={tag.label}>{tag.label}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Descrição</label>

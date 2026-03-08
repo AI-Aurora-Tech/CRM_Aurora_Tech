@@ -188,6 +188,10 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
       userId: p.user_id, // Map for frontend
       clientName: p.client_name,
       dueDate: p.due_date,
+      paymentMethod: p.payment_method,
+      paymentDetails: p.payment_details,
+      implementationFee: p.implementation_fee,
+      monthlyFee: p.monthly_fee,
       tasks: (tasks || []).map((t: any) => ({ ...t, completed: !!t.completed })),
       assignedTo: ['Você'] // Default value since column is missing in DB
     };
@@ -197,7 +201,7 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
 });
 
 app.post("/api/projects", authenticateToken, async (req: any, res) => {
-  const { name, clientName, description, status, dueDate, progress, value, tasks } = req.body;
+  const { name, clientName, description, status, dueDate, progress, value, tasks, paymentMethod, paymentDetails, implementationFee, monthlyFee } = req.body;
   const projectId = uuidv4();
   
   console.log("Tentando criar projeto:", { name, clientName, projectId, userId: req.user.id });
@@ -213,7 +217,11 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
       status,
       due_date: dueDate,
       progress: progress || 0,
-      value: value || 0
+      value: value || 0,
+      payment_method: paymentMethod,
+      payment_details: paymentDetails,
+      implementation_fee: implementationFee,
+      monthly_fee: monthlyFee
       // assigned_to removed as column does not exist
     });
 
@@ -255,6 +263,10 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   if (updates.dueDate) dbUpdates.due_date = updates.dueDate;
   if (updates.progress !== undefined) dbUpdates.progress = updates.progress;
   if (updates.value !== undefined) dbUpdates.value = updates.value;
+  if (updates.paymentMethod) dbUpdates.payment_method = updates.paymentMethod;
+  if (updates.paymentDetails) dbUpdates.payment_details = updates.paymentDetails;
+  if (updates.implementationFee !== undefined) dbUpdates.implementation_fee = updates.implementationFee;
+  if (updates.monthlyFee !== undefined) dbUpdates.monthly_fee = updates.monthlyFee;
   // assigned_to removed as column does not exist
 
   const { error } = await supabase
@@ -299,14 +311,25 @@ app.post("/api/projects/:projectId/tasks", authenticateToken, async (req: any, r
 });
 
 app.patch("/api/tasks/:id", authenticateToken, async (req: any, res) => {
-  const { completed, type } = req.body;
+  const { completed, type, title } = req.body;
   const updates: any = {};
   if (completed !== undefined) updates.completed = !!completed;
   if (type !== undefined) updates.type = type;
+  if (title !== undefined) updates.title = title;
 
   const { error } = await supabase
     .from("tasks")
     .update(updates)
+    .eq("id", req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.delete("/api/tasks/:id", authenticateToken, async (req: any, res) => {
+  const { error } = await supabase
+    .from("tasks")
+    .delete()
     .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });
@@ -326,13 +349,14 @@ app.get("/api/transactions", authenticateToken, async (req: any, res) => {
     ...t,
     userId: t.user_id,
     paymentMethod: t.payment_method,
-    currentInstallment: t.current_installment
+    currentInstallment: t.current_installment,
+    status: t.status
   }));
   res.json(mapped);
 });
 
 app.post("/api/transactions", authenticateToken, async (req: any, res) => {
-  const { date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment } = req.body;
+  const { date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment, status } = req.body;
   
   if (paymentMethod === 'Cartão de Crédito' && installments && installments > 1 && !currentInstallment) {
     const baseAmount = amount / installments;
@@ -353,7 +377,8 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
         provider,
         payment_method: paymentMethod,
         installments,
-        current_installment: i + 1
+        current_installment: i + 1,
+        status: status || 'paid'
       });
     }
     const { error } = await supabase.from("transactions").insert(transactionsToInsert);
@@ -374,11 +399,47 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
         provider,
         payment_method: paymentMethod,
         installments: installments || null,
-        current_installment: currentInstallment || null
+        current_installment: currentInstallment || null,
+        status: status || 'paid'
       });
     if (error) return res.status(500).json({ error: error.message });
     res.json({ id });
   }
+});
+
+app.patch("/api/transactions/:id", authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const updates = { ...req.body };
+  
+  const dbUpdates: any = {};
+  if (updates.date) dbUpdates.date = updates.date;
+  if (updates.description) dbUpdates.description = updates.description;
+  if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+  if (updates.type) dbUpdates.type = updates.type;
+  if (updates.category) dbUpdates.category = updates.category;
+  if (updates.provider) dbUpdates.provider = updates.provider;
+  if (updates.paymentMethod) dbUpdates.payment_method = updates.paymentMethod;
+  if (updates.status) dbUpdates.status = updates.status;
+
+  const { error } = await supabase
+    .from("transactions")
+    .update(dbUpdates)
+    .eq("id", id)
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.delete("/api/transactions/:id", authenticateToken, async (req: any, res) => {
+  const { error } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
 // Events
@@ -394,13 +455,15 @@ app.get("/api/events", authenticateToken, async (req: any, res) => {
     ...e,
     userId: e.user_id,
     start: e.start_time,
-    end: e.end_time
+    end: e.end_time,
+    tag: e.tag,
+    color: e.color
   }));
   res.json(mapped);
 });
 
 app.post("/api/events", authenticateToken, async (req: any, res) => {
-  const { title, start, end, description, location, type } = req.body;
+  const { title, start, end, description, location, type, tag, color } = req.body;
   const id = uuidv4();
   const { error } = await supabase
     .from("events")
@@ -412,10 +475,36 @@ app.post("/api/events", authenticateToken, async (req: any, res) => {
       end_time: end,
       description,
       location,
-      type
+      type,
+      tag,
+      color
     });
   if (error) return res.status(500).json({ error: error.message });
   res.json({ id });
+});
+
+app.patch("/api/events/:id", authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const updates = { ...req.body };
+  
+  const dbUpdates: any = {};
+  if (updates.title) dbUpdates.title = updates.title;
+  if (updates.start) dbUpdates.start_time = updates.start;
+  if (updates.end) dbUpdates.end_time = updates.end;
+  if (updates.description) dbUpdates.description = updates.description;
+  if (updates.location) dbUpdates.location = updates.location;
+  if (updates.type) dbUpdates.type = updates.type;
+  if (updates.tag) dbUpdates.tag = updates.tag;
+  if (updates.color) dbUpdates.color = updates.color;
+
+  const { error } = await supabase
+    .from("events")
+    .update(dbUpdates)
+    .eq("id", id)
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
 app.delete("/api/events/:id", authenticateToken, async (req: any, res) => {

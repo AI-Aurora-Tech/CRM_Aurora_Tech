@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { GoogleGenAI, Type } from "@google/genai";
 import OpenAI from "openai";
 import { Lead } from "./store";
@@ -7,9 +8,10 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
   const openAIKey = import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
+  // Tentar OpenAI primeiro se a chave existir
   if (openAIKey) {
     try {
-      const openai = new OpenAI({ apiKey: openAIKey, dangerouslyAllowBrowser: true }); // Allow browser usage since this is client-side code in preview
+      const openai = new OpenAI({ apiKey: openAIKey, dangerouslyAllowBrowser: true });
       
       const completion = await openai.chat.completions.create({
         messages: [
@@ -62,72 +64,23 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
     } catch (error: any) {
       console.error("Erro ao gerar leads com OpenAI:", error);
       
-      // Se o erro for 404 (modelo não encontrado) ou 400 (bad request), tentar com gpt-3.5-turbo
-      if (error.status === 404 || error.status === 400 || error.code === 'model_not_found') {
-        console.log("Tentando fallback para gpt-3.5-turbo...");
-        try {
-          const openai = new OpenAI({ apiKey: openAIKey, dangerouslyAllowBrowser: true });
-          const completion = await openai.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: "Você é um assistente especializado em gerar leads B2B qualificados no Brasil. Retorne APENAS um JSON válido."
-              },
-              {
-                role: "user",
-                content: `Gere uma lista de 10 empresas brasileiras (leads) para o dia ${date} que atendam aos seguintes critérios:
-                1. Tenham Instagram e/ou e-mail registrado publicamente.
-                2. NÃO tenham site próprio ou aplicativo duplicado.
-                3. Sejam empresas de pequeno a médio porte.
-                4. Prioridade: Escolas (para venda de CRM), clínicas de estética e negócios de atendimento que precisam automatizar processos.
-                5. Localização: Brasil.
-                6. Retorne um JSON com a seguinte estrutura:
-                [
-                  {
-                    "name": "Nome da Empresa",
-                    "industry": "Ramo de Atividade",
-                    "instagram": "@instagram",
-                    "email": "email@exemplo.com",
-                    "description": "Por que é um bom lead"
-                  }
-                ]`
-              }
-            ],
-            model: "gpt-3.5-turbo",
-            // gpt-3.5-turbo doesn't support response_format: { type: "json_object" } in older versions, but newer ones do.
-            // To be safe, let's remove it for fallback or ensure we parse correctly.
-          });
-
-          const content = completion.choices[0].message.content;
-          if (!content) throw new Error("Sem conteúdo no fallback");
-
-          const parsed = JSON.parse(content);
-          const leads = Array.isArray(parsed) ? parsed : (parsed.leads || parsed.companies || []);
-
-          return leads.map((l: any) => ({
-            id: uuidv4(),
-            name: l.name,
-            industry: l.industry,
-            contact: {
-              instagram: l.instagram,
-              email: l.email,
-            },
-            description: l.description,
-            generatedAt: date,
-          }));
-        } catch (fallbackError) {
-          console.error("Erro no fallback OpenAI:", fallbackError);
-          throw error; // Throw original error to show to user
-        }
-      }
+      // Se for erro de cota (429) ou erro de modelo, tentar fallback para Gemini
+      const isQuotaError = error.status === 429 || error.code === 'insufficient_quota' || error.message?.includes('quota');
+      const isModelError = error.status === 404 || error.code === 'model_not_found';
       
-      throw error; // Don't fallback to Gemini if OpenAI key is present
+      if ((isQuotaError || isModelError) && geminiKey) {
+        console.warn(`Erro OpenAI (${error.status || error.code}). Tentando fallback para Gemini...`);
+        // Continua para a lógica do Gemini abaixo
+      } else {
+        throw error; // Se não tiver chave Gemini ou for outro erro, lança o erro original
+      }
     }
   }
 
+  // Lógica do Gemini (Fallback ou Principal)
   if (!geminiKey) {
-    console.error("Nenhuma chave de API (OpenAI ou Gemini) configurada.");
-    return [];
+    console.error("Nenhuma chave de API (OpenAI ou Gemini) configurada ou válida.");
+    throw new Error("Configure uma chave de API (OpenAI ou Gemini) para gerar leads.");
   }
 
   try {
@@ -157,7 +110,6 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
             required: ["name", "industry", "description"],
           },
         },
-        tools: [{ googleSearch: {} }],
       },
     });
 
@@ -179,9 +131,9 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
     }));
   } catch (error: any) {
     if (error.message?.includes("429") || error.status === "RESOURCE_EXHAUSTED" || error.message?.includes("quota")) {
-      throw new Error("Limite de cota do Gemini atingido. Configure sua chave da OpenAI no .env para evitar isso.");
+      throw new Error("Limite de cota atingido em ambos os provedores (OpenAI e Gemini). Tente novamente mais tarde.");
     }
-    console.error("Erro ao gerar leads:", error);
+    console.error("Erro ao gerar leads com Gemini:", error);
     throw error;
   }
 }
