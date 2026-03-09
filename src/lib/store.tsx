@@ -473,15 +473,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addEvent = async (event: Omit<Event, 'id'>) => {
-    const res = await fetch('/api/events', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(event),
-    });
-    if (res.ok) fetchData();
+    try {
+      const res = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(event),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || errorData.details || 'Falha ao criar evento');
+      }
+      
+      fetchData();
+    } catch (error: any) {
+      console.error('Erro ao adicionar evento:', error);
+      throw error;
+    }
   };
 
   const updateEvent = async (id: string, updates: Partial<Event>) => {

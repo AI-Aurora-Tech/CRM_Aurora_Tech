@@ -141,22 +141,41 @@ END:VCALENDAR`;
 
       {/* Calendar Controls */}
       <div className="flex items-center justify-between bg-white p-4 rounded-t-xl border border-slate-200 border-b-0">
-        <h2 className="text-lg font-semibold text-slate-900 capitalize">
-          {view === 'day' 
-            ? format(currentDate, "d 'de' MMMM yyyy", { locale: ptBR })
-            : format(currentDate, 'MMMM yyyy', { locale: ptBR })
-          }
-        </h2>
-        <div className="flex items-center space-x-2">
-          <button onClick={prevPeriod} className="p-2 hover:bg-slate-100 rounded-full text-slate-600">
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <button onClick={() => setCurrentDate(new Date())} className="text-sm font-medium text-indigo-600 hover:text-indigo-500 px-2">
-            Hoje
-          </button>
-          <button onClick={nextPeriod} className="p-2 hover:bg-slate-100 rounded-full text-slate-600">
-            <ChevronRight className="h-5 w-5" />
-          </button>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center bg-slate-50 rounded-lg border border-slate-200 p-1">
+            <button 
+              onClick={prevPeriod} 
+              className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-600 transition-all"
+              title="Anterior"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button 
+              onClick={() => setCurrentDate(new Date())} 
+              className="px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-white hover:shadow-sm rounded-md transition-all"
+            >
+              Hoje
+            </button>
+            <button 
+              onClick={nextPeriod} 
+              className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-600 transition-all"
+              title="Próximo"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 capitalize">
+            {view === 'day' 
+              ? format(currentDate, "d 'de' MMMM yyyy", { locale: ptBR })
+              : format(currentDate, 'MMMM yyyy', { locale: ptBR })
+            }
+          </h2>
+        </div>
+        
+        <div className="hidden md:flex items-center text-sm text-slate-500 font-medium">
+          {view === 'month' && "Visualização Mensal"}
+          {view === 'week' && "Visualização Semanal"}
+          {view === 'day' && "Visualização Diária"}
         </div>
       </div>
 
@@ -240,22 +259,27 @@ END:VCALENDAR`;
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4">Adicionar Novo Evento</h3>
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                const formData = new FormData(e.currentTarget);
+                const form = e.currentTarget;
+                const formData = new FormData(form);
                 const tagLabel = formData.get('tag') as string;
                 const tagColor = EVENT_TAGS.find(t => t.label === tagLabel)?.color;
 
-                addEvent({
-                  title: formData.get('title') as string,
-                  start: new Date(formData.get('start') as string).toISOString(),
-                  end: new Date(formData.get('end') as string).toISOString(),
-                  type: 'meeting',
-                  description: formData.get('description') as string,
-                  tag: tagLabel,
-                  color: tagColor
-                });
-                setIsModalOpen(false);
+                try {
+                  await addEvent({
+                    title: formData.get('title') as string,
+                    start: new Date(formData.get('start') as string).toISOString(),
+                    end: new Date(formData.get('end') as string).toISOString(),
+                    type: 'meeting',
+                    description: formData.get('description') as string,
+                    tag: tagLabel,
+                    color: tagColor
+                  });
+                  setIsModalOpen(false);
+                } catch (error: any) {
+                  alert(error.message || "Erro ao criar evento. Verifique se a tabela 'events' possui as colunas 'tag' e 'color'.");
+                }
               }}
               className="space-y-4"
             >

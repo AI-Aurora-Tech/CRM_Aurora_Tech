@@ -465,22 +465,36 @@ app.get("/api/events", authenticateToken, async (req: any, res) => {
 app.post("/api/events", authenticateToken, async (req: any, res) => {
   const { title, start, end, description, location, type, tag, color } = req.body;
   const id = uuidv4();
-  const { error } = await supabase
-    .from("events")
-    .insert({
-      id,
-      user_id: req.user.id,
-      title,
-      start_time: start,
-      end_time: end,
-      description,
-      location,
-      type,
-      tag,
-      color
-    });
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ id });
+  
+  try {
+    const { error } = await supabase
+      .from("events")
+      .insert({
+        id,
+        user_id: req.user.id,
+        title,
+        start_time: start,
+        end_time: end,
+        description,
+        location,
+        type,
+        tag,
+        color
+      });
+      
+    if (error) {
+      console.error("Erro ao inserir evento no Supabase:", error);
+      return res.status(500).json({ 
+        error: error.message,
+        details: "Certifique-se de que as colunas 'tag' e 'color' existem na tabela 'events'."
+      });
+    }
+    
+    res.json({ id });
+  } catch (err: any) {
+    console.error("Erro fatal ao criar evento:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.patch("/api/events/:id", authenticateToken, async (req: any, res) => {
