@@ -206,9 +206,28 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
   
   console.log("Tentando criar projeto:", { name, clientName, projectId, userId: req.user.id });
 
-  const { error: pError } = await supabase
-    .from("projects")
-    .insert({
+  const projectData: any = {
+    id: projectId,
+    user_id: req.user.id,
+    name,
+    client_name: clientName,
+    description,
+    status,
+    due_date: dueDate,
+    progress: progress || 0,
+    value: value || 0,
+    payment_method: paymentMethod,
+    payment_details: paymentDetails,
+    implementation_fee: implementationFee,
+    monthly_fee: monthlyFee
+  };
+
+  let { error: pError } = await supabase.from("projects").insert(projectData);
+
+  // Fallback se colunas financeiras novas não existirem
+  if (pError && (pError.message.includes("column") || pError.message.includes("schema cache"))) {
+    console.warn("Aviso: Algumas colunas novas podem estar faltando na tabela 'projects'. Tentando inserção simplificada...");
+    const fallbackData = {
       id: projectId,
       user_id: req.user.id,
       name,
@@ -217,13 +236,11 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
       status,
       due_date: dueDate,
       progress: progress || 0,
-      value: value || 0,
-      payment_method: paymentMethod,
-      payment_details: paymentDetails,
-      implementation_fee: implementationFee,
-      monthly_fee: monthlyFee
-      // assigned_to removed as column does not exist
-    });
+      value: value || 0
+    };
+    const { error: retryError } = await supabase.from("projects").insert(fallbackData);
+    pError = retryError;
+  }
 
   if (pError) {
     console.error("Erro ao inserir projeto no Supabase:", pError);
@@ -236,14 +253,12 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
       id: uuidv4(),
       project_id: projectId,
       title: t.title,
-      completed: !!t.completed, // Usar booleano real
+      completed: !!t.completed,
       type: t.type
     }));
     const { error: tError } = await supabase.from("tasks").insert(tasksToInsert);
     if (tError) {
       console.error("Erro ao inserir tarefas no Supabase:", tError);
-      // Não retornamos erro 500 aqui para não invalidar o projeto já criado, 
-      // mas logamos para depuração.
     }
   }
   
@@ -267,13 +282,31 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   if (updates.paymentDetails) dbUpdates.payment_details = updates.paymentDetails;
   if (updates.implementationFee !== undefined) dbUpdates.implementation_fee = updates.implementationFee;
   if (updates.monthlyFee !== undefined) dbUpdates.monthly_fee = updates.monthlyFee;
-  // assigned_to removed as column does not exist
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("projects")
     .update(dbUpdates)
     .eq("id", id)
     .eq("user_id", req.user.id);
+
+  // Fallback se colunas novas não existirem no update
+  if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
+    const safeUpdates: any = {};
+    if (updates.name) safeUpdates.name = updates.name;
+    if (updates.clientName) safeUpdates.client_name = updates.clientName;
+    if (updates.description) safeUpdates.description = updates.description;
+    if (updates.status) safeUpdates.status = updates.status;
+    if (updates.dueDate) safeUpdates.due_date = updates.dueDate;
+    if (updates.progress !== undefined) safeUpdates.progress = updates.progress;
+    if (updates.value !== undefined) safeUpdates.value = updates.value;
+    
+    const { error: retryError } = await supabase
+      .from("projects")
+      .update(safeUpdates)
+      .eq("id", id)
+      .eq("user_id", req.user.id);
+    error = retryError;
+  }
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -467,9 +500,25 @@ app.post("/api/events", authenticateToken, async (req: any, res) => {
   const id = uuidv4();
   
   try {
-    const { error } = await supabase
-      .from("events")
-      .insert({
+    const eventData: any = {
+      id,
+      user_id: req.user.id,
+      title,
+      start_time: start,
+      end_time: end,
+      description,
+      location,
+      type,
+      tag,
+      color
+    };
+
+    let { error } = await supabase.from("events").insert(eventData);
+      
+    // Fallback se tag/color não existirem
+    if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
+      console.warn("Aviso: Colunas 'tag' ou 'color' podem estar faltando na tabela 'events'. Tentando inserção simplificada...");
+      const fallbackData = {
         id,
         user_id: req.user.id,
         title,
@@ -477,16 +526,17 @@ app.post("/api/events", authenticateToken, async (req: any, res) => {
         end_time: end,
         description,
         location,
-        type,
-        tag,
-        color
-      });
-      
+        type
+      };
+      const { error: retryError } = await supabase.from("events").insert(fallbackData);
+      error = retryError;
+    }
+
     if (error) {
       console.error("Erro ao inserir evento no Supabase:", error);
       return res.status(500).json({ 
         error: error.message,
-        details: "Certifique-se de que as colunas 'tag' e 'color' existem na tabela 'events'."
+        details: "Certifique-se de que as colunas 'tag' e 'color' existem na tabela 'events' para usar essas funcionalidades."
       });
     }
     
@@ -511,11 +561,29 @@ app.patch("/api/events/:id", authenticateToken, async (req: any, res) => {
   if (updates.tag) dbUpdates.tag = updates.tag;
   if (updates.color) dbUpdates.color = updates.color;
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("events")
     .update(dbUpdates)
     .eq("id", id)
     .eq("user_id", req.user.id);
+
+  // Fallback para update se colunas novas não existirem
+  if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
+    const safeUpdates: any = {};
+    if (updates.title) safeUpdates.title = updates.title;
+    if (updates.start) safeUpdates.start_time = updates.start;
+    if (updates.end) safeUpdates.end_time = updates.end;
+    if (updates.description) safeUpdates.description = updates.description;
+    if (updates.location) safeUpdates.location = updates.location;
+    if (updates.type) safeUpdates.type = updates.type;
+    
+    const { error: retryError } = await supabase
+      .from("events")
+      .update(safeUpdates)
+      .eq("id", id)
+      .eq("user_id", req.user.id);
+    error = retryError;
+  }
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
