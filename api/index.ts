@@ -606,14 +606,17 @@ app.get("/api/leads", authenticateToken, async (req: any, res) => {
     .select("*")
     .eq("user_id", req.user.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.warn("Aviso: Erro ao buscar leads (a tabela pode não existir):", error.message);
+    return res.json([]); // Retorna array vazio para não quebrar o frontend
+  }
 
   const mappedLeads = (leads || []).map(l => ({
     id: l.id,
     name: l.name,
     industry: l.industry,
     description: l.description,
-    generatedAt: l.generated_at,
+    generatedAt: l.generated_at ? l.generated_at.split('T')[0] : l.generated_at, // Garante apenas a data YYYY-MM-DD
     contact: {
       instagram: l.instagram,
       email: l.email
@@ -625,7 +628,7 @@ app.get("/api/leads", authenticateToken, async (req: any, res) => {
 app.post("/api/leads", authenticateToken, async (req: any, res) => {
   const leads = req.body;
   const leadsToInsert = leads.map((l: any) => ({
-    id: uuidv4(),
+    id: l.id || uuidv4(), // Usa o ID gerado no frontend para manter consistência
     user_id: req.user.id,
     name: l.name,
     industry: l.industry,
@@ -636,7 +639,10 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
   }));
   
   const { error } = await supabase.from("leads").insert(leadsToInsert);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error("Erro ao inserir leads no banco:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
   res.json({ success: true });
 });
 

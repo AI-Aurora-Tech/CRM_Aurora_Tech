@@ -14,7 +14,7 @@ export default function Leads() {
   const [error, setError] = useState<string | null>(null);
 
   const dateKey = format(selectedDate, 'yyyy-MM-dd');
-  const todaysLeads = leads.filter(l => l.generatedAt === dateKey);
+  const todaysLeads = leads.filter(l => l.generatedAt && l.generatedAt.startsWith(dateKey));
 
   // Calendar Logic
   const monthStart = startOfMonth(currentMonth);
