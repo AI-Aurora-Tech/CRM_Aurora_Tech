@@ -33,7 +33,7 @@ export default function Leads() {
     try {
       const newLeads = await generateDailyLeads(dateKey);
       if (newLeads.length > 0) {
-        addLeads(newLeads);
+        await addLeads(newLeads);
       }
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro ao gerar leads.");

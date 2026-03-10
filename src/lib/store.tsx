@@ -526,15 +526,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addLeads = async (newLeads: Lead[]) => {
-    const res = await fetch('/api/leads', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(newLeads),
-    });
-    if (res.ok) fetchData();
+    // Atualização otimista para mostrar os leads na tela imediatamente
+    setState(prev => ({
+      ...prev,
+      leads: [...prev.leads, ...newLeads]
+    }));
+
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newLeads),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Falha ao salvar leads no banco de dados');
+      }
+      
+      fetchData();
+    } catch (error: any) {
+      console.error("Erro ao salvar leads:", error);
+      throw new Error(`Os leads foram gerados, mas houve um erro ao salvá-los no banco de dados: ${error.message}. Verifique se a tabela 'leads' existe no Supabase.`);
+    }
   };
 
   return (
