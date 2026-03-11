@@ -617,6 +617,7 @@ app.get("/api/leads", authenticateToken, async (req: any, res) => {
     industry: l.industry,
     description: l.description,
     generatedAt: l.generated_at ? l.generated_at.split('T')[0] : l.generated_at, // Garante apenas a data YYYY-MM-DD
+    status: l.status || 'Novo',
     contact: {
       instagram: l.instagram,
       email: l.email
@@ -626,23 +627,91 @@ app.get("/api/leads", authenticateToken, async (req: any, res) => {
 });
 
 app.post("/api/leads", authenticateToken, async (req: any, res) => {
-  const leads = req.body;
-  const leadsToInsert = leads.map((l: any) => ({
-    id: l.id || uuidv4(), // Usa o ID gerado no frontend para manter consistência
-    user_id: req.user.id,
-    name: l.name,
-    industry: l.industry,
-    instagram: l.contact?.instagram || l.instagram,
-    email: l.contact?.email || l.email,
-    description: l.description,
-    generated_at: l.generatedAt
-  }));
+  const leads = Array.isArray(req.body) ? req.body : [req.body];
   
+  // Buscar leads existentes para evitar duplicatas
+  const { data: existingLeads } = await supabase
+    .from("leads")
+    .select("name, instagram, email")
+    .eq("user_id", req.user.id);
+
+  const existingNames = new Set((existingLeads || []).map(l => l.name.toLowerCase()));
+  const existingInstas = new Set((existingLeads || []).map(l => l.instagram?.toLowerCase()).filter(Boolean));
+  
+  const leadsToInsert = leads
+    .filter((l: any) => {
+      const nameLower = l.name.toLowerCase();
+      const instaLower = (l.contact?.instagram || l.instagram || "").toLowerCase();
+      
+      // Se já existe pelo nome ou instagram, ignora
+      if (existingNames.has(nameLower)) return false;
+      if (instaLower && existingInstas.has(instaLower)) return false;
+      
+      return true;
+    })
+    .map((l: any) => ({
+      id: l.id || uuidv4(),
+      user_id: req.user.id,
+      name: l.name,
+      industry: l.industry,
+      instagram: l.contact?.instagram || l.instagram,
+      email: l.contact?.email || l.email,
+      description: l.description,
+      generated_at: l.generatedAt,
+      status: l.status || 'Novo'
+    }));
+  
+  if (leadsToInsert.length === 0) {
+    return res.json({ success: true, message: "Nenhum lead novo para inserir (duplicatas ignoradas)" });
+  }
+
   const { error } = await supabase.from("leads").insert(leadsToInsert);
+  
+  if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
+    // Fallback se a coluna 'status' não existir ainda
+    const fallbackLeads = leadsToInsert.map(({ status, ...rest }) => rest);
+    const { error: retryError } = await supabase.from("leads").insert(fallbackLeads);
+    if (retryError) return res.status(500).json({ error: retryError.message });
+    return res.json({ success: true, warning: "Coluna 'status' não encontrada, leads salvos sem status." });
+  }
+
   if (error) {
     console.error("Erro ao inserir leads no banco:", error.message);
     return res.status(500).json({ error: error.message });
   }
+  res.json({ success: true });
+});
+
+app.patch("/api/leads/:id", authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const updates = { ...req.body };
+  
+  const dbUpdates: any = {};
+  if (updates.name) dbUpdates.name = updates.name;
+  if (updates.industry) dbUpdates.industry = updates.industry;
+  if (updates.description) dbUpdates.description = updates.description;
+  if (updates.status) dbUpdates.status = updates.status;
+  if (updates.contact?.instagram) dbUpdates.instagram = updates.contact.instagram;
+  if (updates.contact?.email) dbUpdates.email = updates.contact.email;
+
+  const { error } = await supabase
+    .from("leads")
+    .update(dbUpdates)
+    .eq("id", id)
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.delete("/api/leads/:id", authenticateToken, async (req: any, res) => {
+  const { error } = await supabase
+    .from("leads")
+    .delete()
+    .eq("id", req.params.id)
+    .eq("user_id", req.user.id);
+
+  if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 

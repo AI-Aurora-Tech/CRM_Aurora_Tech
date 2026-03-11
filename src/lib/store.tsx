@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 export type ProjectStatus = 'Planejamento' | 'Em Andamento' | 'Revisão' | 'Concluído';
 
+export type LeadStatus = 'Novo' | 'Primeiro Contato' | 'Em Negociação' | 'Resposta Positiva' | 'Resposta Negativa' | 'Convertido';
+
 export interface Lead {
   id: string;
   name: string;
@@ -15,6 +17,7 @@ export interface Lead {
   };
   description: string;
   generatedAt: string; // ISO date (just the date part YYYY-MM-DD)
+  status: LeadStatus;
 }
 
 export interface Task {
@@ -93,6 +96,8 @@ interface AppContextType extends AppState {
   updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
   addLeads: (leads: Lead[]) => Promise<void>;
+  updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
+  deleteLead: (id: string) => Promise<void>;
   toggleTask: (projectId: string, taskId: string) => Promise<void>;
   addTask: (projectId: string, task: Omit<Task, 'id'>) => Promise<void>;
   updateTask: (projectId: string, taskId: string, updates: Partial<Task>) => Promise<void>;
@@ -554,6 +559,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateLead = async (id: string, updates: Partial<Lead>) => {
+    setState(prev => ({
+      ...prev,
+      leads: prev.leads.map(l => l.id === id ? { ...l, ...updates } : l)
+    }));
+
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar lead');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
+  };
+
+  const deleteLead = async (id: string) => {
+    setState(prev => ({
+      ...prev,
+      leads: prev.leads.filter(l => l.id !== id)
+    }));
+
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao deletar lead');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -573,6 +618,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateEvent,
         deleteEvent,
         addLeads,
+        updateLead,
+        deleteLead,
         toggleTask,
         addTask,
         updateTask,
