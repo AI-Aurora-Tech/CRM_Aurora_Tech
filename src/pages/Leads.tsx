@@ -3,7 +3,7 @@ import { useApp, LeadStatus } from '../lib/store';
 import { generateDailyLeads } from '../lib/leadService';
 import { format, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Search, Instagram, Mail, Building2, Loader2, Sparkles, AlertCircle, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Instagram, Mail, Building2, Loader2, Sparkles, AlertCircle, Trash2, MessageCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const STATUS_COLORS: Record<LeadStatus, string> = {
@@ -66,6 +66,18 @@ export default function Leads() {
 
   const handleStatusChange = (id: string, status: LeadStatus) => {
     updateLead(id, { status });
+  };
+
+  const getWhatsAppLink = (phone: string, name: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const message = `Olá, tudo bem? Vi o trabalho da ${name} e achei muito interessante. Gostaria de conversar sobre como podemos ajudar a automatizar e melhorar o atendimento de vocês.`;
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  };
+
+  const getEmailLink = (email: string, name: string) => {
+    const subject = `Oportunidade de parceria com a ${name}`;
+    const body = `Olá, tudo bem?\n\nVi o trabalho da ${name} e achei muito interessante. Gostaria de conversar sobre como podemos ajudar a automatizar e melhorar o atendimento de vocês.\n\nAguardo retorno!`;
+    return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   return (
@@ -244,9 +256,20 @@ export default function Leads() {
                             Instagram
                           </a>
                         )}
+                        {lead.contact.whatsapp && (
+                          <a
+                            href={getWhatsAppLink(lead.contact.whatsapp, lead.name)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-3 py-1.5 rounded-lg bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors"
+                          >
+                            <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                            WhatsApp
+                          </a>
+                        )}
                         {lead.contact.email && (
                           <a
-                            href={`mailto:${lead.contact.email}`}
+                            href={getEmailLink(lead.contact.email, lead.name)}
                             className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
                           >
                             <Mail className="mr-1.5 h-3.5 w-3.5" />

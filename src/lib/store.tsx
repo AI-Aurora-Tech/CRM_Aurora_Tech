@@ -14,6 +14,7 @@ export interface Lead {
   contact: {
     instagram?: string;
     email?: string;
+    whatsapp?: string;
   };
   description: string;
   generatedAt: string; // ISO date (just the date part YYYY-MM-DD)

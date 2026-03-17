@@ -620,7 +620,8 @@ app.get("/api/leads", authenticateToken, async (req: any, res) => {
     status: l.status || 'Novo',
     contact: {
       instagram: l.instagram,
-      email: l.email
+      email: l.email,
+      whatsapp: l.whatsapp
     }
   }));
   res.json(mappedLeads);
@@ -656,6 +657,7 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
       industry: l.industry,
       instagram: l.contact?.instagram || l.instagram,
       email: l.contact?.email || l.email,
+      whatsapp: l.contact?.whatsapp || l.whatsapp,
       description: l.description,
       generated_at: l.generatedAt,
       status: l.status || 'Novo'
@@ -668,11 +670,11 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
   const { error } = await supabase.from("leads").insert(leadsToInsert);
   
   if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
-    // Fallback se a coluna 'status' não existir ainda
-    const fallbackLeads = leadsToInsert.map(({ status, ...rest }) => rest);
+    // Fallback se a coluna 'status' ou 'whatsapp' não existir ainda
+    const fallbackLeads = leadsToInsert.map(({ status, whatsapp, ...rest }) => rest);
     const { error: retryError } = await supabase.from("leads").insert(fallbackLeads);
     if (retryError) return res.status(500).json({ error: retryError.message });
-    return res.json({ success: true, warning: "Coluna 'status' não encontrada, leads salvos sem status." });
+    return res.json({ success: true, warning: "Colunas novas não encontradas, leads salvos com fallback." });
   }
 
   if (error) {
@@ -693,6 +695,7 @@ app.patch("/api/leads/:id", authenticateToken, async (req: any, res) => {
   if (updates.status) dbUpdates.status = updates.status;
   if (updates.contact?.instagram) dbUpdates.instagram = updates.contact.instagram;
   if (updates.contact?.email) dbUpdates.email = updates.contact.email;
+  if (updates.contact?.whatsapp) dbUpdates.whatsapp = updates.contact.whatsapp;
 
   const { error } = await supabase
     .from("leads")

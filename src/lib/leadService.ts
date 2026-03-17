@@ -36,10 +36,12 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
                   "industry": "Ramo de Atividade",
                   "instagram": "@instagram",
                   "email": "email@exemplo.com",
+                  "whatsapp": "5511999999999",
                   "description": "Por que é um bom lead"
                 }
               ]
-            }`
+            }
+            IMPORTANTE: Tente encontrar o número de WhatsApp público da empresa (apenas números, com DDI 55). Se não encontrar, deixe vazio.`
           }
         ],
         model: "gpt-4o-mini",
@@ -69,6 +71,7 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
         contact: {
           instagram: l.instagram || l.contact?.instagram,
           email: l.email || l.contact?.email,
+          whatsapp: l.whatsapp || l.contact?.whatsapp,
         },
         description: l.description || "Lead gerado por IA",
         generatedAt: date,
@@ -102,12 +105,13 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere uma lista de 10 empresas brasileiras (leads) para o dia ${date} que atendam aos seguintes critérios:
-      1. Tenham Instagram e/ou e-mail registrado publicamente.
+      1. Tenham Instagram, e-mail e/ou WhatsApp registrado publicamente.
       2. NÃO tenham site próprio ou aplicativo duplicado.
       3. Sejam empresas de pequeno a médio porte.
       4. Prioridade: Escolas (para venda de CRM), clínicas de estética e negócios de atendimento que precisam automatizar processos.
       5. Localização: Brasil.
-      6. Retorne APENAS um JSON válido contendo um array de objetos.`,
+      6. IMPORTANTE: Tente encontrar o número de WhatsApp público da empresa (apenas números, com DDI 55). Se não encontrar, deixe vazio.
+      7. Retorne APENAS um JSON válido contendo um array de objetos.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -119,6 +123,7 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
               industry: { type: Type.STRING, description: "Ramo de atividade" },
               instagram: { type: Type.STRING, description: "Link ou handle do Instagram" },
               email: { type: Type.STRING, description: "E-mail de contato" },
+              whatsapp: { type: Type.STRING, description: "Número de WhatsApp (apenas números, com DDI 55)" },
               description: { type: Type.STRING, description: "Breve descrição do porquê é um bom lead" },
             },
             required: ["name", "industry", "description"],
@@ -144,6 +149,7 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
       contact: {
         instagram: l.instagram || l.contact?.instagram,
         email: l.email || l.contact?.email,
+        whatsapp: l.whatsapp || l.contact?.whatsapp,
       },
       description: l.description || "Lead gerado por IA",
       generatedAt: date,
