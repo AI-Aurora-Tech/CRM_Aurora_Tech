@@ -68,15 +68,19 @@ export default function Leads() {
     updateLead(id, { status });
   };
 
+  const getMessage = (name: string) => {
+    return `Olá, ${name}! Tudo bem?\n\nSomos a Aurora Tech, uma empresa especializada em soluções de automação e tecnologia para negócios que desejam crescer, otimizar processos e inovar.\n\nAo analisarmos o seu segmento, identificamos um grande potencial para a implementação de soluções inteligentes que podem tornar sua operação mais eficiente através da automação de atendimentos, organização de contatos e integração de canais digitais, entre outros.\n\nTudo isso de forma personalizada, de acordo com a sua realidade.\n\nGostaríamos de entender melhor suas necessidades e apresentar, sem compromisso, algumas ideias que podem gerar resultados rápidos para você.\n\nPodemos agendar uma conversa rápida?\n\nFicamos à disposição!\n\nAtenciosamente,\nEquipe Aurora Tech`;
+  };
+
   const getWhatsAppLink = (phone: string, name: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
-    const message = `Olá, tudo bem? Vi o trabalho da ${name} e achei muito interessante. Gostaria de conversar sobre como podemos ajudar a automatizar e melhorar o atendimento de vocês.`;
+    const message = getMessage(name);
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
   const getEmailLink = (email: string, name: string) => {
     const subject = `Oportunidade de parceria com a ${name}`;
-    const body = `Olá, tudo bem?\n\nVi o trabalho da ${name} e achei muito interessante. Gostaria de conversar sobre como podemos ajudar a automatizar e melhorar o atendimento de vocês.\n\nAguardo retorno!`;
+    const body = getMessage(name);
     return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
