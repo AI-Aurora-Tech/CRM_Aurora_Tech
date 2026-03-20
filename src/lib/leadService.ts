@@ -5,8 +5,18 @@ import { Lead } from "./store";
 import { v4 as uuidv4 } from 'uuid';
 
 export async function generateDailyLeads(date: string): Promise<Lead[]> {
-  const openAIKey = import.meta.env.VITE_OPENAI_API_KEY || (typeof process !== 'undefined' && process.env ? process.env.OPENAI_API_KEY : undefined);
-  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : undefined);
+  const getEnv = (key: string) => {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key];
+    }
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[`VITE_${key}`]) {
+      return import.meta.env[`VITE_${key}`];
+    }
+    return undefined;
+  };
+
+  const openAIKey = getEnv('OPENAI_API_KEY');
+  const geminiKey = getEnv('GEMINI_API_KEY');
 
   // Tentar OpenAI primeiro se a chave existir
   if (openAIKey) {

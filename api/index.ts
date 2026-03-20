@@ -6,6 +6,10 @@ import dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
+import cron from "node-cron";
+import { generateDailyLeads } from "../src/lib/leadService";
+import { format } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -734,6 +738,85 @@ if (process.env.NODE_ENV !== "production") {
     res.sendFile(path.join(distPath, "index.html"));
   });
 }
+
+// --- CRON JOB: Geração Automática de Leads ---
+// Executa todos os dias às 08:00 no horário de Brasília
+cron.schedule("0 8 * * *", async () => {
+  console.log("Executando CRON JOB: Geração de Leads Diários (08:00 BRT)");
+  try {
+    // 1. Buscar todos os usuários
+    const { data: users, error: usersError } = await supabase.from("users").select("id, email");
+    
+    if (usersError || !users) {
+      console.error("Erro ao buscar usuários para o cron job:", usersError);
+      return;
+    }
+
+    // 2. Definir a data de hoje no fuso horário correto
+    const now = new Date();
+    const zonedDate = toZonedTime(now, "America/Sao_Paulo");
+    const dateStr = format(zonedDate, "yyyy-MM-dd");
+
+    for (const user of users) {
+      console.log(`Verificando leads para o usuário ${user.email} (${user.id})...`);
+      
+      // Verificar se já existem leads gerados hoje para este usuário
+      const { data: existingLeads } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("generated_at", dateStr);
+
+      if (existingLeads && existingLeads.length >= 10) {
+        console.log(`Usuário ${user.email} já possui ${existingLeads.length} leads hoje. Pulando.`);
+        continue;
+      }
+
+      // Gerar os leads via IA
+      console.log(`Gerando novos leads para ${user.email}...`);
+      const generatedLeads = await generateDailyLeads(dateStr);
+      
+      if (!generatedLeads || generatedLeads.length === 0) {
+        console.log(`Nenhum lead gerado para ${user.email}.`);
+        continue;
+      }
+
+      // Preparar para inserção no banco
+      const leadsToInsert = generatedLeads.map((l: any) => ({
+        id: l.id || uuidv4(),
+        user_id: user.id,
+        name: l.name,
+        industry: l.industry,
+        instagram: l.contact?.instagram || l.instagram,
+        email: l.contact?.email || l.email,
+        whatsapp: l.contact?.whatsapp || l.whatsapp,
+        description: l.description,
+        generated_at: dateStr,
+        status: 'Novo'
+      }));
+
+      // Inserir no banco
+      const { error: insertError } = await supabase.from("leads").insert(leadsToInsert);
+      
+      if (insertError) {
+        if (insertError.message.includes("column") || insertError.message.includes("schema cache")) {
+          // Fallback se colunas novas não existirem
+          const fallbackLeads = leadsToInsert.map(({ status, whatsapp, ...rest }) => rest);
+          await supabase.from("leads").insert(fallbackLeads);
+          console.log(`Leads salvos para ${user.email} (com fallback).`);
+        } else {
+          console.error(`Erro ao salvar leads para ${user.email}:`, insertError.message);
+        }
+      } else {
+        console.log(`Leads gerados e salvos para ${user.email} com sucesso!`);
+      }
+    }
+  } catch (error) {
+    console.error("Erro no CRON JOB de leads:", error);
+  }
+}, {
+  timezone: "America/Sao_Paulo"
+});
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
