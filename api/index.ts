@@ -61,7 +61,15 @@ const authenticateToken = (req: any, res: any, next: any) => {
 app.get("/api/debug/leads", async (req, res) => {
   const { data: leads, error: leadsError } = await supabase.from("leads").select("*").limit(5);
   const { data: users, error: usersError } = await supabase.from("users").select("*").limit(5);
-  res.json({ leads, users, leadsError, usersError });
+  res.json({ 
+    leads, 
+    users, 
+    leadsError, 
+    usersError,
+    hasUrl: !!process.env.SUPABASE_URL,
+    hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasAnonKey: !!process.env.SUPABASE_ANON_KEY
+  });
 });
 
 // --- Auth Routes ---

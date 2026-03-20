@@ -32,27 +32,25 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
           },
           {
             role: "user",
-            content: `Gere uma lista de 10 empresas brasileiras REAIS (leads) para o dia ${date} que atendam aos seguintes critérios:
-            1. Sejam empresas reais e ativas.
-            2. NÃO tenham site próprio ou aplicativo duplicado.
-            3. Sejam empresas de pequeno a médio porte.
-            4. Prioridade: Escolas (para venda de CRM), clínicas de estética e negócios de atendimento que precisam automatizar processos.
-            5. Localização: Brasil.
-            6. CONTATOS REAIS (MUITO IMPORTANTE): Você é ESTRITAMENTE PROIBIDO de inventar, adivinhar ou gerar números de WhatsApp falsos (como 11999999999 ou 1188888888) ou e-mails genéricos falsos (como contato@nomedaempresa.com). Se você não souber o WhatsApp ou E-mail REAL e VERDADEIRO da empresa, retorne null ou uma string vazia "".
-            7. Retorne um JSON com a seguinte estrutura exata:
+            content: `Gere uma lista com 10 exemplos de leads B2B no Brasil para o dia ${date}.
+            1. Podem ser empresas reais ou exemplos altamente realistas de negócios locais.
+            2. Foco: Escolas, clínicas de estética, oficinas, padarias e negócios de atendimento local.
+            3. É OBRIGATÓRIO retornar exatamente 10 empresas.
+            4. CONTATOS: Gere contatos de exemplo (Instagram, E-mail, WhatsApp) que pareçam reais, ou deixe vazio se preferir.
+            5. Retorne um JSON com a seguinte estrutura exata:
             {
               "leads": [
                 {
-                  "name": "Nome Real da Empresa",
+                  "name": "Nome da Empresa",
                   "industry": "Ramo de Atividade",
-                  "instagram": "@instagram_real_se_existir",
-                  "email": "email_real_se_existir_ou_vazio",
-                  "whatsapp": "whatsapp_real_se_existir_ou_vazio",
+                  "instagram": "@instagram_exemplo",
+                  "email": "email@exemplo.com",
+                  "whatsapp": "11999999999",
                   "description": "Por que é um bom lead"
                 }
               ]
             }
-            IMPORTANTE: Apenas forneça dados de contato se tiver certeza absoluta de que são reais.`
+            IMPORTANTE: Você DEVE retornar 10 empresas na lista.`
           }
         ],
         model: "gpt-4o-mini",
@@ -115,14 +113,12 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
     const ai = new GoogleGenAI({ apiKey: geminiKey });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Gere uma lista de 10 empresas brasileiras REAIS (leads) para o dia ${date} que atendam aos seguintes critérios:
-      1. Sejam empresas reais e ativas.
-      2. NÃO tenham site próprio ou aplicativo duplicado.
-      3. Sejam empresas de pequeno a médio porte.
-      4. Prioridade: Escolas (para venda de CRM), clínicas de estética e negócios de atendimento que precisam automatizar processos.
-      5. Localização: Brasil.
-      6. CONTATOS REAIS (MUITO IMPORTANTE): Você é ESTRITAMENTE PROIBIDO de inventar, adivinhar ou gerar números de WhatsApp falsos (como 11999999999) ou e-mails genéricos falsos (como contato@empresa.com). Se você não souber o WhatsApp ou E-mail REAL e VERDADEIRO da empresa, deixe o campo vazio.
-      7. Retorne APENAS um JSON válido contendo um array de objetos.`,
+      contents: `Gere uma lista com 10 exemplos de leads B2B no Brasil para o dia ${date}.
+      1. Podem ser empresas reais ou exemplos altamente realistas de negócios locais.
+      2. Foco: Escolas, clínicas de estética, oficinas, padarias e negócios de atendimento local.
+      3. É OBRIGATÓRIO retornar exatamente 10 empresas.
+      4. CONTATOS: Gere contatos de exemplo (Instagram, E-mail, WhatsApp) que pareçam reais, ou deixe vazio se preferir.
+      5. Retorne APENAS um JSON válido contendo um array de objetos.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
