@@ -69,17 +69,19 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
-    const { data: user, error } = await supabase
+    const { data: users, error } = await supabase
       .from("users")
       .select("*")
       .eq("email", email)
-      .single();
+      .limit(1);
 
     if (error) {
       console.error(`Erro Supabase para ${email}:`, error.message);
       // Se for erro de tabela não encontrada ou algo assim, avisar
       return res.status(401).json({ error: `Erro no banco de dados: ${error.message}` });
     }
+
+    const user = users && users.length > 0 ? users[0] : null;
 
     if (!user) {
       console.log(`Usuário não encontrado: ${email}`);
@@ -654,23 +656,46 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
       
       return true;
     })
-    .map((l: any) => ({
-      id: l.id || uuidv4(),
-      user_id: req.user.id,
-      name: l.name,
-      industry: l.industry,
-      instagram: l.contact?.instagram || l.instagram,
-      email: l.contact?.email || l.email,
-      whatsapp: l.contact?.whatsapp || l.whatsapp,
-      description: l.description,
-      generated_at: l.generatedAt,
-      status: l.status || 'Novo'
-    }));
+    .map((l: any) => {
+      let insta = (l.contact?.instagram || l.instagram || "").trim();
+      let mail = (l.contact?.email || l.email || "").trim();
+      let wpp = (l.contact?.whatsapp || l.whatsapp || "").trim();
+      
+      // Sanitização agressiva para evitar erros de CHECK constraint no banco
+      if (insta.toLowerCase().includes("não") || insta.toLowerCase().includes("nao") || insta === "null") insta = "";
+      if (mail.toLowerCase().includes("não") || mail.toLowerCase().includes("nao") || !mail.includes("@")) mail = "";
+      
+      // Manter apenas números e o sinal de + no WhatsApp
+      wpp = wpp.replace(/[^\d+]/g, '');
+      if (wpp.length > 0 && !wpp.startsWith('+')) {
+        // Se não tiver +, assume Brasil (+55) se tiver 10 ou 11 dígitos
+        if (wpp.length === 10 || wpp.length === 11) {
+          wpp = '+55' + wpp;
+        } else if (wpp.startsWith('55')) {
+          wpp = '+' + wpp;
+        }
+      }
+      if (wpp.length < 8) wpp = "";
+      
+      return {
+        id: l.id || uuidv4(),
+        user_id: req.user.id,
+        name: l.name,
+        industry: l.industry,
+        instagram: insta === "" ? null : insta,
+        email: mail === "" ? null : mail,
+        whatsapp: wpp === "" ? null : wpp,
+        description: l.description,
+        generated_at: l.generatedAt,
+        status: l.status || 'Novo'
+      };
+    });
   
   if (leadsToInsert.length === 0) {
     return res.json({ success: true, message: "Nenhum lead novo para inserir (duplicatas ignoradas)" });
   }
 
+  console.log("LEADS TO INSERT:", JSON.stringify(leadsToInsert, null, 2));
   const { error } = await supabase.from("leads").insert(leadsToInsert);
   
   if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
@@ -782,18 +807,38 @@ cron.schedule("0 8 * * *", async () => {
       }
 
       // Preparar para inserção no banco
-      const leadsToInsert = generatedLeads.map((l: any) => ({
-        id: l.id || uuidv4(),
-        user_id: user.id,
-        name: l.name,
-        industry: l.industry,
-        instagram: l.contact?.instagram || l.instagram,
-        email: l.contact?.email || l.email,
-        whatsapp: l.contact?.whatsapp || l.whatsapp,
-        description: l.description,
-        generated_at: dateStr,
-        status: 'Novo'
-      }));
+      const leadsToInsert = generatedLeads.map((l: any) => {
+        let insta = (l.contact?.instagram || l.instagram || "").trim();
+        let mail = (l.contact?.email || l.email || "").trim();
+        let wpp = (l.contact?.whatsapp || l.whatsapp || "").trim();
+        
+        // Sanitização agressiva
+        if (insta.toLowerCase().includes("não") || insta.toLowerCase().includes("nao") || insta === "null") insta = "";
+        if (mail.toLowerCase().includes("não") || mail.toLowerCase().includes("nao") || !mail.includes("@")) mail = "";
+        
+        wpp = wpp.replace(/[^\d+]/g, '');
+        if (wpp.length > 0 && !wpp.startsWith('+')) {
+          if (wpp.length === 10 || wpp.length === 11) {
+            wpp = '+55' + wpp;
+          } else if (wpp.startsWith('55')) {
+            wpp = '+' + wpp;
+          }
+        }
+        if (wpp.length < 8) wpp = "";
+        
+        return {
+          id: l.id || uuidv4(),
+          user_id: user.id,
+          name: l.name,
+          industry: l.industry,
+          instagram: insta === "" ? null : insta,
+          email: mail === "" ? null : mail,
+          whatsapp: wpp === "" ? null : wpp,
+          description: l.description,
+          generated_at: dateStr,
+          status: 'Novo'
+        };
+      });
 
       // Inserir no banco
       const { error: insertError } = await supabase.from("leads").insert(leadsToInsert);
