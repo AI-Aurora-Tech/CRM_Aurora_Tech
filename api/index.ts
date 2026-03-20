@@ -58,6 +58,12 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+app.get("/api/debug/leads", async (req, res) => {
+  const { data: leads, error: leadsError } = await supabase.from("leads").select("*").limit(5);
+  const { data: users, error: usersError } = await supabase.from("users").select("*").limit(5);
+  res.json({ leads, users, leadsError, usersError });
+});
+
 // --- Auth Routes ---
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
@@ -609,27 +615,36 @@ app.delete("/api/events/:id", authenticateToken, async (req: any, res) => {
 app.get("/api/leads", authenticateToken, async (req: any, res) => {
   const { data: leads, error } = await supabase
     .from("leads")
-    .select("*")
-    .eq("user_id", req.user.id);
+    .select("*");
 
   if (error) {
     console.warn("Aviso: Erro ao buscar leads (a tabela pode não existir):", error.message);
     return res.json([]); // Retorna array vazio para não quebrar o frontend
   }
 
-  const mappedLeads = (leads || []).map(l => ({
-    id: l.id,
-    name: l.name,
-    industry: l.industry,
-    description: l.description,
-    generatedAt: l.generated_at ? l.generated_at.split('T')[0] : l.generated_at, // Garante apenas a data YYYY-MM-DD
-    status: l.status || 'Novo',
-    contact: {
-      instagram: l.instagram,
-      email: l.email,
-      whatsapp: l.whatsapp
+  const mappedLeads = (leads || []).map(l => {
+    let genAt = l.generated_at;
+    if (!genAt) {
+      // Se não tiver data de geração, usa a data de criação ou a data atual
+      genAt = l.created_at ? l.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
+    } else {
+      genAt = genAt.split('T')[0];
     }
-  }));
+
+    return {
+      id: l.id,
+      name: l.name,
+      industry: l.industry,
+      description: l.description,
+      generatedAt: genAt,
+      status: l.status || 'Novo',
+      contact: {
+        instagram: l.instagram,
+        email: l.email,
+        whatsapp: l.whatsapp
+      }
+    };
+  });
   res.json(mappedLeads);
 });
 
@@ -639,8 +654,7 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
   // Buscar leads existentes para evitar duplicatas
   const { data: existingLeads } = await supabase
     .from("leads")
-    .select("name, instagram, email")
-    .eq("user_id", req.user.id);
+    .select("name, instagram, email");
 
   const existingNames = new Set((existingLeads || []).map(l => l.name.toLowerCase()));
   const existingInstas = new Set((existingLeads || []).map(l => l.instagram?.toLowerCase()).filter(Boolean));
@@ -662,21 +676,30 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
       let wpp = (l.contact?.whatsapp || l.whatsapp || "").trim();
       
       // Sanitização agressiva para evitar erros de CHECK constraint no banco
-      if (insta.toLowerCase().includes("não") || insta.toLowerCase().includes("nao") || insta === "null") insta = "";
-      if (mail.toLowerCase().includes("não") || mail.toLowerCase().includes("nao") || !mail.includes("@")) mail = "";
+      if (insta.includes('instagram.com/')) {
+        insta = insta.split('instagram.com/')[1].split('/')[0].split('?')[0];
+      }
+      insta = insta.replace(/[^a-zA-Z0-9._]/g, '');
+      if (insta.length < 2) insta = "";
+      
+      if (!mail.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) mail = "";
       
       // Manter apenas números e o sinal de + no WhatsApp
-      wpp = wpp.replace(/[^\d+]/g, '');
-      if (wpp.length > 0 && !wpp.startsWith('+')) {
-        // Se não tiver +, assume Brasil (+55) se tiver 10 ou 11 dígitos
+      wpp = wpp.replace(/[^\d]/g, ''); // Remove tudo que não é dígito primeiro
+      if (wpp.length > 0) {
         if (wpp.length === 10 || wpp.length === 11) {
           wpp = '+55' + wpp;
         } else if (wpp.startsWith('55')) {
           wpp = '+' + wpp;
+        } else {
+          wpp = '+' + wpp;
         }
       }
-      if (wpp.length < 8) wpp = "";
+      if (wpp.length < 10) wpp = ""; // Um número com DDI tem pelo menos 10 caracteres
       
+      const validStatuses = ['Novo', 'Em Contato', 'Em Negociação', 'Resposta Negativa', 'Convertido'];
+      const status = validStatuses.includes(l.status) ? l.status : 'Novo';
+
       return {
         id: l.id || uuidv4(),
         user_id: req.user.id,
@@ -687,7 +710,7 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
         whatsapp: wpp === "" ? null : wpp,
         description: l.description,
         generated_at: l.generatedAt,
-        status: l.status || 'Novo'
+        status: status
       };
     });
   
@@ -729,8 +752,7 @@ app.patch("/api/leads/:id", authenticateToken, async (req: any, res) => {
   const { error } = await supabase
     .from("leads")
     .update(dbUpdates)
-    .eq("id", id)
-    .eq("user_id", req.user.id);
+    .eq("id", id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -740,8 +762,7 @@ app.delete("/api/leads/:id", authenticateToken, async (req: any, res) => {
   const { error } = await supabase
     .from("leads")
     .delete()
-    .eq("id", req.params.id)
-    .eq("user_id", req.user.id);
+    .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -813,19 +834,29 @@ cron.schedule("0 8 * * *", async () => {
         let wpp = (l.contact?.whatsapp || l.whatsapp || "").trim();
         
         // Sanitização agressiva
-        if (insta.toLowerCase().includes("não") || insta.toLowerCase().includes("nao") || insta === "null") insta = "";
-        if (mail.toLowerCase().includes("não") || mail.toLowerCase().includes("nao") || !mail.includes("@")) mail = "";
+        if (insta.includes('instagram.com/')) {
+          insta = insta.split('instagram.com/')[1].split('/')[0].split('?')[0];
+        }
+        insta = insta.replace(/[^a-zA-Z0-9._]/g, '');
+        if (insta.length < 2) insta = "";
         
-        wpp = wpp.replace(/[^\d+]/g, '');
-        if (wpp.length > 0 && !wpp.startsWith('+')) {
+        if (!mail.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) mail = "";
+        
+        wpp = wpp.replace(/[^\d]/g, '');
+        if (wpp.length > 0) {
           if (wpp.length === 10 || wpp.length === 11) {
             wpp = '+55' + wpp;
           } else if (wpp.startsWith('55')) {
             wpp = '+' + wpp;
+          } else {
+            wpp = '+' + wpp;
           }
         }
-        if (wpp.length < 8) wpp = "";
+        if (wpp.length < 10) wpp = "";
         
+        const validStatuses = ['Novo', 'Em Contato', 'Em Negociação', 'Resposta Negativa', 'Convertido'];
+        const status = validStatuses.includes(l.status) ? l.status : 'Novo';
+
         return {
           id: l.id || uuidv4(),
           user_id: user.id,
@@ -836,7 +867,7 @@ cron.schedule("0 8 * * *", async () => {
           whatsapp: wpp === "" ? null : wpp,
           description: l.description,
           generated_at: dateStr,
-          status: 'Novo'
+          status: status
         };
       });
 

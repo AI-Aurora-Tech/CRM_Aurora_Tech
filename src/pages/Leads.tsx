@@ -25,6 +25,12 @@ export default function Leads() {
   const dateKey = format(selectedDate, 'yyyy-MM-dd');
   const todaysLeads = leads.filter(l => l.generatedAt && l.generatedAt.startsWith(dateKey));
 
+  const sortedLeads = [...todaysLeads].sort((a, b) => {
+    const countA = (a.contact?.whatsapp ? 1 : 0) + (a.contact?.instagram ? 1 : 0) + (a.contact?.email ? 1 : 0);
+    const countB = (b.contact?.whatsapp ? 1 : 0) + (b.contact?.instagram ? 1 : 0) + (b.contact?.email ? 1 : 0);
+    return countB - countA;
+  });
+
   // Calendar Logic
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
@@ -199,11 +205,11 @@ export default function Leads() {
               Leads de {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
             </h2>
             <span className="text-sm text-slate-500 font-medium">
-              {todaysLeads.length} leads encontrados
+              {sortedLeads.length} leads encontrados
             </span>
           </div>
 
-          {todaysLeads.length === 0 ? (
+          {sortedLeads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-dashed border-slate-300 text-center px-4">
               <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-4">
                 <Search className="h-6 w-6 text-slate-400" />
@@ -215,7 +221,7 @@ export default function Leads() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {todaysLeads.map(lead => (
+              {sortedLeads.map(lead => (
                 <div key={lead.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                     <div className="space-y-3 flex-1">
