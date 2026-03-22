@@ -6,7 +6,6 @@ import dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
-import cron from "node-cron";
 import { generateDailyLeads } from "../src/lib/leadService";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
@@ -17,14 +16,14 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "aurora-super-secret-key";
 
 // Supabase initialization
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder.supabase.co";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder";
 
-if (!supabaseUrl || !supabaseKey) {
+if (supabaseUrl === "https://placeholder.supabase.co" || supabaseKey === "placeholder") {
   console.error("⚠️ AVISO: SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não estão configurados!");
 }
 
@@ -794,22 +793,31 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // --- CRON JOB: Geração Automática de Leads ---
-// Executa todos os dias às 08:00 no horário de Brasília
-cron.schedule("0 8 * * *", async () => {
-  console.log("Executando CRON JOB: Geração de Leads Diários (08:00 BRT)");
+// Endpoint para ser chamado pelo Vercel Cron
+app.get("/api/cron/generate-leads", async (req, res) => {
+  console.log("Executando CRON JOB: Geração de Leads Diários");
+  
+  // Opcional: Verificar um token de segurança para evitar chamadas indevidas
+  const authHeader = req.headers.authorization;
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   try {
     // 1. Buscar todos os usuários
     const { data: users, error: usersError } = await supabase.from("users").select("id, email");
     
     if (usersError || !users) {
       console.error("Erro ao buscar usuários para o cron job:", usersError);
-      return;
+      return res.status(500).json({ error: "Erro ao buscar usuários" });
     }
 
     // 2. Definir a data de hoje no fuso horário correto
     const now = new Date();
     const zonedDate = toZonedTime(now, "America/Sao_Paulo");
     const dateStr = format(zonedDate, "yyyy-MM-dd");
+
+    let totalGenerated = 0;
 
     for (const user of users) {
       console.log(`Verificando leads para o usuário ${user.email} (${user.id})...`);
@@ -888,18 +896,21 @@ cron.schedule("0 8 * * *", async () => {
           const fallbackLeads = leadsToInsert.map(({ status, whatsapp, ...rest }) => rest);
           await supabase.from("leads").insert(fallbackLeads);
           console.log(`Leads salvos para ${user.email} (com fallback).`);
+          totalGenerated += fallbackLeads.length;
         } else {
           console.error(`Erro ao salvar leads para ${user.email}:`, insertError.message);
         }
       } else {
         console.log(`Leads gerados e salvos para ${user.email} com sucesso!`);
+        totalGenerated += leadsToInsert.length;
       }
     }
-  } catch (error) {
+    
+    res.json({ success: true, message: `CRON finalizado. ${totalGenerated} leads gerados no total.` });
+  } catch (error: any) {
     console.error("Erro no CRON JOB de leads:", error);
+    res.status(500).json({ error: error.message });
   }
-}, {
-  timezone: "America/Sao_Paulo"
 });
 
 app.listen(PORT, "0.0.0.0", () => {
