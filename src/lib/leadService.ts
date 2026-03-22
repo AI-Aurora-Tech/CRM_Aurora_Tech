@@ -5,18 +5,8 @@ import { Lead } from "./store";
 import { v4 as uuidv4 } from 'uuid';
 
 export async function generateDailyLeads(date: string): Promise<Lead[]> {
-  const getEnv = (key: string) => {
-    if (typeof process !== 'undefined' && process.env && process.env[key]) {
-      return process.env[key];
-    }
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[`VITE_${key}`]) {
-      return import.meta.env[`VITE_${key}`];
-    }
-    return undefined;
-  };
-
-  const openAIKey = getEnv('OPENAI_API_KEY');
-  const geminiKey = getEnv('GEMINI_API_KEY');
+  const openAIKey = process.env.OPENAI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
 
   // Tentar OpenAI primeiro se a chave existir
   if (openAIKey) {
@@ -89,15 +79,11 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
     } catch (error: any) {
       console.error("Erro ao gerar leads com OpenAI:", error);
       
-      // Se for erro de cota (429) ou erro de modelo, tentar fallback para Gemini
-      const isQuotaError = error.status === 429 || error.code === 'insufficient_quota' || error.message?.includes('quota');
-      const isModelError = error.status === 404 || error.code === 'model_not_found';
-      
-      if ((isQuotaError || isModelError || error.message?.includes("formato esperado")) && geminiKey) {
+      if (geminiKey) {
         console.warn(`Erro OpenAI (${error.status || error.code || error.message}). Tentando fallback para Gemini...`);
         // Continua para a lógica do Gemini abaixo
       } else {
-        throw error; // Se não tiver chave Gemini ou for outro erro, lança o erro original
+        throw error; // Se não tiver chave Gemini, lança o erro original
       }
     }
   }

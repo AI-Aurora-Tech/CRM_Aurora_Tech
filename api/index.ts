@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "aurora-super-secret-key";
 
 // Supabase initialization
@@ -30,6 +30,11 @@ if (supabaseUrl === "https://placeholder.supabase.co" || supabaseKey === "placeh
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(express.json());
+
+app.get("/api/test-users", async (req, res) => {
+  const { data, error } = await supabase.from("users").select("*");
+  res.json({ data, error });
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ 
@@ -73,7 +78,12 @@ app.get("/api/debug/leads", async (req, res) => {
 
 // --- Auth Routes ---
 app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
+  let { email, password } = req.body;
+  
+  if (email) {
+    email = email.trim().toLowerCase();
+  }
+  
   console.log(`Tentativa de login para: ${email}`);
   
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -82,11 +92,14 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
+    console.log(`Buscando usuário no Supabase: ${email}`);
     const { data: users, error } = await supabase
       .from("users")
       .select("*")
       .eq("email", email)
       .limit(1);
+
+    console.log(`Resultado da busca para ${email}:`, users);
 
     if (error) {
       console.error(`Erro Supabase para ${email}:`, error.message);
@@ -128,11 +141,12 @@ app.post("/api/auth/login", async (req, res) => {
 // Temporary route to seed a default user if none exists
 app.get("/api/auth/seed", async (req, res) => {
   try {
-    const email = "admin@auroratech.com";
-    const password = "admin";
+    const email = req.query.email ? String(req.query.email) : "admin@auroratech.com";
+    const password = req.query.password ? String(req.query.password) : "admin";
+    const name = req.query.name ? String(req.query.name) : "Administrador";
     const hashedPassword = bcrypt.hashSync(password, 10);
     
-    console.log("Iniciando processo de seed...");
+    console.log(`Iniciando processo de seed para ${email}...`);
 
     const { data: existingUser, error: fetchError } = await supabase
       .from("users")
@@ -146,7 +160,7 @@ app.get("/api/auth/seed", async (req, res) => {
     }
 
     if (existingUser) {
-      console.log("Usuário admin já existe no banco.");
+      console.log(`Usuário ${email} já existe no banco.`);
       return res.json({ message: "Usuário já existe", email });
     }
 
@@ -156,7 +170,7 @@ app.get("/api/auth/seed", async (req, res) => {
         id: uuidv4(),
         email,
         password: hashedPassword,
-        name: "Administrador"
+        name
       });
 
     if (insertError) {
@@ -164,10 +178,50 @@ app.get("/api/auth/seed", async (req, res) => {
       return res.status(500).json({ error: insertError.message });
     }
 
-    console.log("Usuário admin criado com sucesso!");
+    console.log(`Usuário ${email} criado com sucesso!`);
     res.json({ message: "Usuário criado com sucesso!", email, password });
   } catch (err: any) {
     console.error("Erro fatal no seed:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  const { email, password, name } = req.body;
+  
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: "E-mail, senha e nome são obrigatórios" });
+  }
+
+  try {
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single();
+
+    if (existingUser) {
+      return res.status(400).json({ error: "Este e-mail já está em uso" });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const newUser = {
+      id: uuidv4(),
+      email,
+      password: hashedPassword,
+      name
+    };
+
+    const { error: insertError } = await supabase.from("users").insert(newUser);
+
+    if (insertError) {
+      return res.status(500).json({ error: insertError.message });
+    }
+
+    const token = jwt.sign({ id: newUser.id, email: newUser.email, name: newUser.name }, JWT_SECRET);
+    res.json({ token, user: { id: newUser.id, email: newUser.email, name: newUser.name } });
+  } catch (err: any) {
+    console.error("Erro no registro:", err);
     res.status(500).json({ error: err.message });
   }
 });
