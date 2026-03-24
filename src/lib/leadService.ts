@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { GoogleGenAI, Type } from "@google/genai";
 import OpenAI from "openai";
-import { Lead } from "./store";
+import type { Lead } from "./store.js";
 import { v4 as uuidv4 } from 'uuid';
 
 export async function generateDailyLeads(date: string): Promise<Lead[]> {

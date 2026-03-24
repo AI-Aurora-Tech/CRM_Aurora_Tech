@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import { fileURLToPath } from "url";
-import { generateDailyLeads } from "../src/lib/leadService";
+import { generateDailyLeads } from "../src/lib/leadService.js";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
