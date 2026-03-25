@@ -465,7 +465,7 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
   const { date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment, status } = req.body;
   
   if (paymentMethod === 'Cartão de Crédito' && installments && installments > 1 && !currentInstallment) {
-    const baseAmount = amount / installments;
+    const baseAmount = Math.round((amount / installments) * 100) / 100;
     const startDate = new Date(date);
     const transactionsToInsert = [];
     
@@ -488,7 +488,10 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
       });
     }
     const { error } = await supabase.from("transactions").insert(transactionsToInsert);
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Erro ao inserir múltiplas transações:", error);
+      return res.status(500).json({ error: error.message });
+    }
     res.json({ success: true });
   } else {
     const id = uuidv4();
@@ -508,7 +511,10 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
         current_installment: currentInstallment || null,
         status: status || 'paid'
       });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("Erro ao inserir transação única:", error);
+      return res.status(500).json({ error: error.message });
+    }
     res.json({ id });
   }
 });

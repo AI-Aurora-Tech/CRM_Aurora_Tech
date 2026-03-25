@@ -12,9 +12,9 @@ export default function Finance() {
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [isInstallment, setIsInstallment] = useState(false);
-  const [transactionStatus, setTransactionStatus] = useState<'paid' | 'pending' | 'planned'>('paid');
+  const [transactionStatus, setTransactionStatus] = useState<'paid' | 'pending' | 'standby'>('paid');
 
-  const activeTransactions = transactions.filter(t => t.status !== 'planned');
+  const activeTransactions = transactions.filter(t => t.status !== 'standby');
   const totalIncome = activeTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = activeTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;
@@ -68,7 +68,7 @@ export default function Finance() {
 
   const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e'];
 
-  const handleStatusChange = async (id: string, newStatus: 'paid' | 'pending' | 'planned') => {
+  const handleStatusChange = async (id: string, newStatus: 'paid' | 'pending' | 'standby') => {
     await updateTransaction(id, { status: newStatus });
   };
 
@@ -208,7 +208,7 @@ export default function Finance() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((t) => (
-                <tr key={t.id} className={cn("hover:bg-slate-50/50 transition-colors", t.status === 'planned' && "opacity-60 bg-slate-50/30")}>
+                <tr key={t.id} className={cn("hover:bg-slate-50/50 transition-colors", t.status === 'standby' && "opacity-60 bg-slate-50/30")}>
                   <td className="px-6 py-4 text-sm text-slate-600">
                     {format(parseISO(t.date), 'dd/MM/yyyy')}
                   </td>
@@ -244,7 +244,7 @@ export default function Finance() {
                     >
                       <option value="paid">Pago</option>
                       <option value="pending">Pendente</option>
-                      <option value="planned">Standby</option>
+                      <option value="standby">Standby</option>
                     </select>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
@@ -347,10 +347,10 @@ export default function Finance() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTransactionStatus('planned')}
+                  onClick={() => setTransactionStatus('standby')}
                   className={cn(
                     "px-3 py-1 text-xs font-medium rounded-full border transition-colors",
-                    transactionStatus === 'planned' ? "bg-slate-100 text-slate-700 border-slate-300" : "bg-white text-slate-600 border-slate-200"
+                    transactionStatus === 'standby' ? "bg-slate-100 text-slate-700 border-slate-300" : "bg-white text-slate-600 border-slate-200"
                   )}
                 >
                   <AlertCircle className="h-3 w-3 inline mr-1"/> Standby
