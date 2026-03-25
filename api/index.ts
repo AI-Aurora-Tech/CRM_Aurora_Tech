@@ -245,8 +245,7 @@ app.post("/api/auth/change-password", authenticateToken, async (req: any, res) =
 app.get("/api/projects", authenticateToken, async (req: any, res) => {
   const { data: projects, error: pError } = await supabase
     .from("projects")
-    .select("*")
-    .eq("user_id", req.user.id);
+    .select("*");
 
   if (pError) return res.status(500).json({ error: pError.message });
 
@@ -359,8 +358,7 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   let { error } = await supabase
     .from("projects")
     .update(dbUpdates)
-    .eq("id", id)
-    .eq("user_id", req.user.id);
+    .eq("id", id);
 
   // Fallback se colunas novas não existirem no update
   if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
@@ -376,8 +374,7 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
     const { error: retryError } = await supabase
       .from("projects")
       .update(safeUpdates)
-      .eq("id", id)
-      .eq("user_id", req.user.id);
+      .eq("id", id);
     error = retryError;
   }
 
@@ -389,8 +386,7 @@ app.delete("/api/projects/:id", authenticateToken, async (req: any, res) => {
   const { error } = await supabase
     .from("projects")
     .delete()
-    .eq("id", req.params.id)
-    .eq("user_id", req.user.id);
+    .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -446,8 +442,7 @@ app.delete("/api/tasks/:id", authenticateToken, async (req: any, res) => {
 app.get("/api/transactions", authenticateToken, async (req: any, res) => {
   const { data: transactions, error } = await supabase
     .from("transactions")
-    .select("*")
-    .eq("user_id", req.user.id);
+    .select("*");
 
   if (error) return res.status(500).json({ error: error.message });
   
@@ -487,7 +482,16 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
         status: status || 'paid'
       });
     }
-    const { error } = await supabase.from("transactions").insert(transactionsToInsert);
+    let { error } = await supabase.from("transactions").insert(transactionsToInsert);
+    
+    // Fallback se a coluna 'status' não existir
+    if (error && (error.message.includes("column") || error.message.includes("status"))) {
+      console.warn("Aviso: Coluna 'status' pode estar faltando na tabela 'transactions'. Tentando inserção simplificada...");
+      const fallbackTransactions = transactionsToInsert.map(({ status, ...rest }) => rest);
+      const { error: retryError } = await supabase.from("transactions").insert(fallbackTransactions);
+      error = retryError;
+    }
+
     if (error) {
       console.error("Erro ao inserir múltiplas transações:", error);
       return res.status(500).json({ error: error.message });
@@ -495,22 +499,33 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
     res.json({ success: true });
   } else {
     const id = uuidv4();
-    const { error } = await supabase
+    const transactionData: any = {
+      id,
+      user_id: req.user.id,
+      date,
+      description,
+      amount,
+      type,
+      category,
+      provider,
+      payment_method: paymentMethod,
+      installments: installments || null,
+      current_installment: currentInstallment || null,
+      status: status || 'paid'
+    };
+
+    let { error } = await supabase
       .from("transactions")
-      .insert({
-        id,
-        user_id: req.user.id,
-        date,
-        description,
-        amount,
-        type,
-        category,
-        provider,
-        payment_method: paymentMethod,
-        installments: installments || null,
-        current_installment: currentInstallment || null,
-        status: status || 'paid'
-      });
+      .insert(transactionData);
+
+    // Fallback se a coluna 'status' não existir
+    if (error && (error.message.includes("column") || error.message.includes("status"))) {
+      console.warn("Aviso: Coluna 'status' pode estar faltando na tabela 'transactions'. Tentando inserção simplificada...");
+      const { status: _, ...fallbackData } = transactionData;
+      const { error: retryError } = await supabase.from("transactions").insert(fallbackData);
+      error = retryError;
+    }
+
     if (error) {
       console.error("Erro ao inserir transação única:", error);
       return res.status(500).json({ error: error.message });
@@ -533,11 +548,20 @@ app.patch("/api/transactions/:id", authenticateToken, async (req: any, res) => {
   if (updates.paymentMethod) dbUpdates.payment_method = updates.paymentMethod;
   if (updates.status) dbUpdates.status = updates.status;
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("transactions")
     .update(dbUpdates)
-    .eq("id", id)
-    .eq("user_id", req.user.id);
+    .eq("id", id);
+
+  // Fallback se a coluna 'status' não existir no update
+  if (error && (error.message.includes("column") || error.message.includes("status"))) {
+    const { status: _, ...safeUpdates } = dbUpdates;
+    const { error: retryError } = await supabase
+      .from("transactions")
+      .update(safeUpdates)
+      .eq("id", id);
+    error = retryError;
+  }
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -547,8 +571,7 @@ app.delete("/api/transactions/:id", authenticateToken, async (req: any, res) => 
   const { error } = await supabase
     .from("transactions")
     .delete()
-    .eq("id", req.params.id)
-    .eq("user_id", req.user.id);
+    .eq("id", req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
@@ -558,8 +581,7 @@ app.delete("/api/transactions/:id", authenticateToken, async (req: any, res) => 
 app.get("/api/events", authenticateToken, async (req: any, res) => {
   const { data: events, error } = await supabase
     .from("events")
-    .select("*")
-    .eq("user_id", req.user.id);
+    .select("*");
 
   if (error) return res.status(500).json({ error: error.message });
   
@@ -643,8 +665,7 @@ app.patch("/api/events/:id", authenticateToken, async (req: any, res) => {
   let { error } = await supabase
     .from("events")
     .update(dbUpdates)
-    .eq("id", id)
-    .eq("user_id", req.user.id);
+    .eq("id", id);
 
   // Fallback para update se colunas novas não existirem
   if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
@@ -659,8 +680,7 @@ app.patch("/api/events/:id", authenticateToken, async (req: any, res) => {
     const { error: retryError } = await supabase
       .from("events")
       .update(safeUpdates)
-      .eq("id", id)
-      .eq("user_id", req.user.id);
+      .eq("id", id);
     error = retryError;
   }
 
@@ -672,8 +692,7 @@ app.delete("/api/events/:id", authenticateToken, async (req: any, res) => {
   const { error } = await supabase
     .from("events")
     .delete()
-    .eq("id", req.params.id)
-    .eq("user_id", req.user.id);
+    .eq("id", req.params.id);
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
