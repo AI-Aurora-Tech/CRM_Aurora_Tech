@@ -43,6 +43,8 @@ export interface Project {
   paymentDetails?: string;
   implementationFee?: number;
   monthlyFee?: number;
+  isRecurring?: boolean;
+  isCanceled?: boolean;
 }
 
 export type PaymentMethod = 'Boleto' | 'Cartão de Crédito' | 'Cartão de Débito' | 'PIX';
@@ -59,6 +61,7 @@ export interface Transaction {
   installments?: number;
   currentInstallment?: number;
   status?: 'paid' | 'pending' | 'standby';
+  projectId?: string;
 }
 
 export interface Event {
@@ -232,10 +235,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const errorData = await res.json();
       throw new Error(errorData.error || 'Falha ao criar projeto');
     }
+    const data = await res.json();
+    const projectId = data.id;
+
+    // Financial Sync Logic for new projects
+    if (project.status !== 'Planejamento' && project.isRecurring && project.monthlyFee && project.monthlyFee > 0) {
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      nextMonth.setDate(10);
+      
+      await addTransaction({
+        date: nextMonth.toISOString().split('T')[0],
+        description: `Mensalidade: ${project.name}`,
+        amount: project.monthlyFee,
+        type: 'income',
+        category: 'Serviços',
+        provider: project.clientName,
+        paymentMethod: (project.paymentMethod as any) || 'PIX',
+        status: 'pending',
+        projectId: projectId
+      });
+    }
+
     fetchData();
   };
 
   const updateProject = async (id: string, updates: Partial<Project>) => {
+    const previousProject = state.projects.find(p => p.id === id);
+    
     // Optimistic update
     setState(prev => ({
       ...prev,
@@ -252,9 +279,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(updates),
       });
       if (!res.ok) throw new Error('Falha ao atualizar projeto');
+
+      // Financial Sync Logic
+      if (previousProject && updates.status && previousProject.status === 'Planejamento' && updates.status !== 'Planejamento') {
+        const isRecurring = updates.isRecurring !== undefined ? updates.isRecurring : previousProject.isRecurring;
+        const monthlyFee = updates.monthlyFee !== undefined ? updates.monthlyFee : previousProject.monthlyFee;
+        
+        if (isRecurring && monthlyFee && monthlyFee > 0) {
+          const nextMonth = new Date();
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+          nextMonth.setDate(10);
+          
+          await addTransaction({
+            date: nextMonth.toISOString().split('T')[0],
+            description: `Mensalidade: ${updates.name || previousProject.name}`,
+            amount: monthlyFee,
+            type: 'income',
+            category: 'Serviços',
+            provider: updates.clientName || previousProject.clientName,
+            paymentMethod: (updates.paymentMethod as any) || previousProject.paymentMethod || 'PIX',
+            status: 'pending',
+            projectId: id
+          });
+        }
+      }
     } catch (error) {
       console.error(error);
-      // Revert or re-fetch on error
     } finally {
       fetchData();
     }

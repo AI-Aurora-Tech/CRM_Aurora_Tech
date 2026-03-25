@@ -7,14 +7,21 @@ import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, subMonths
 import { ptBR } from 'date-fns/locale';
 
 export default function Finance() {
-  const { transactions, addTransaction, updateTransaction, deleteTransaction } = useApp();
+  const { transactions, projects, addTransaction, updateTransaction, deleteTransaction } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionType, setTransactionType] = useState<'income' | 'expense'>('expense');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [isInstallment, setIsInstallment] = useState(false);
   const [transactionStatus, setTransactionStatus] = useState<'paid' | 'pending' | 'standby'>('paid');
 
-  const activeTransactions = transactions.filter(t => t.status !== 'standby');
+  const activeTransactions = transactions.filter(t => {
+    if (t.status === 'standby') return false;
+    if (t.projectId) {
+      const project = projects.find(p => p.id === t.projectId);
+      if (project?.isCanceled) return false;
+    }
+    return true;
+  });
   const totalIncome = activeTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = activeTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;

@@ -264,6 +264,8 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
       paymentDetails: p.payment_details,
       implementationFee: p.implementation_fee,
       monthlyFee: p.monthly_fee,
+      isRecurring: !!p.is_recurring,
+      isCanceled: !!p.is_canceled,
       tasks: (tasks || []).map((t: any) => ({ ...t, completed: !!t.completed })),
       assignedTo: ['Você'] // Default value since column is missing in DB
     };
@@ -273,7 +275,7 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
 });
 
 app.post("/api/projects", authenticateToken, async (req: any, res) => {
-  const { name, clientName, description, status, dueDate, progress, value, tasks, paymentMethod, paymentDetails, implementationFee, monthlyFee } = req.body;
+  const { name, clientName, description, status, dueDate, progress, value, tasks, paymentMethod, paymentDetails, implementationFee, monthlyFee, isRecurring, isCanceled } = req.body;
   const projectId = uuidv4();
   
   console.log("Tentando criar projeto:", { name, clientName, projectId, userId: req.user.id });
@@ -291,7 +293,9 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
     payment_method: paymentMethod,
     payment_details: paymentDetails,
     implementation_fee: implementationFee,
-    monthly_fee: monthlyFee
+    monthly_fee: monthlyFee,
+    is_recurring: !!isRecurring,
+    is_canceled: !!isCanceled
   };
 
   let { error: pError } = await supabase.from("projects").insert(projectData);
@@ -354,6 +358,8 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   if (updates.paymentDetails) dbUpdates.payment_details = updates.paymentDetails;
   if (updates.implementationFee !== undefined) dbUpdates.implementation_fee = updates.implementationFee;
   if (updates.monthlyFee !== undefined) dbUpdates.monthly_fee = updates.monthlyFee;
+  if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
+  if (updates.isCanceled !== undefined) dbUpdates.is_canceled = updates.isCanceled;
 
   let { error } = await supabase
     .from("projects")
@@ -451,13 +457,14 @@ app.get("/api/transactions", authenticateToken, async (req: any, res) => {
     userId: t.user_id,
     paymentMethod: t.payment_method,
     currentInstallment: t.current_installment,
-    status: t.status
+    status: t.status,
+    projectId: t.project_id
   }));
   res.json(mapped);
 });
 
 app.post("/api/transactions", authenticateToken, async (req: any, res) => {
-  const { date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment, status } = req.body;
+  const { date, description, amount, type, category, provider, paymentMethod, installments, currentInstallment, status, projectId } = req.body;
   
   if (paymentMethod === 'Cartão de Crédito' && installments && installments > 1 && !currentInstallment) {
     const baseAmount = Math.round((amount / installments) * 100) / 100;
@@ -479,15 +486,16 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
         payment_method: paymentMethod,
         installments,
         current_installment: i + 1,
-        status: status || 'paid'
+        status: status || 'paid',
+        project_id: projectId || null
       });
     }
     let { error } = await supabase.from("transactions").insert(transactionsToInsert);
     
-    // Fallback se a coluna 'status' não existir
-    if (error && (error.message.includes("column") || error.message.includes("status"))) {
-      console.warn("Aviso: Coluna 'status' pode estar faltando na tabela 'transactions'. Tentando inserção simplificada...");
-      const fallbackTransactions = transactionsToInsert.map(({ status, ...rest }) => rest);
+    // Fallback se a coluna 'status' ou 'project_id' não existir
+    if (error && (error.message.includes("column") || error.message.includes("status") || error.message.includes("project_id"))) {
+      console.warn("Aviso: Algumas colunas podem estar faltando na tabela 'transactions'. Tentando inserção simplificada...");
+      const fallbackTransactions = transactionsToInsert.map(({ status, project_id, ...rest }) => rest);
       const { error: retryError } = await supabase.from("transactions").insert(fallbackTransactions);
       error = retryError;
     }
@@ -511,17 +519,18 @@ app.post("/api/transactions", authenticateToken, async (req: any, res) => {
       payment_method: paymentMethod,
       installments: installments || null,
       current_installment: currentInstallment || null,
-      status: status || 'paid'
+      status: status || 'paid',
+      project_id: projectId || null
     };
 
     let { error } = await supabase
       .from("transactions")
       .insert(transactionData);
 
-    // Fallback se a coluna 'status' não existir
-    if (error && (error.message.includes("column") || error.message.includes("status"))) {
-      console.warn("Aviso: Coluna 'status' pode estar faltando na tabela 'transactions'. Tentando inserção simplificada...");
-      const { status: _, ...fallbackData } = transactionData;
+    // Fallback se a coluna 'status' ou 'project_id' não existir
+    if (error && (error.message.includes("column") || error.message.includes("status") || error.message.includes("project_id"))) {
+      console.warn("Aviso: Algumas colunas podem estar faltando na tabela 'transactions'. Tentando inserção simplificada...");
+      const { status: _, project_id: __, ...fallbackData } = transactionData;
       const { error: retryError } = await supabase.from("transactions").insert(fallbackData);
       error = retryError;
     }
@@ -547,6 +556,7 @@ app.patch("/api/transactions/:id", authenticateToken, async (req: any, res) => {
   if (updates.provider) dbUpdates.provider = updates.provider;
   if (updates.paymentMethod) dbUpdates.payment_method = updates.paymentMethod;
   if (updates.status) dbUpdates.status = updates.status;
+  if (updates.projectId) dbUpdates.project_id = updates.projectId;
 
   let { error } = await supabase
     .from("transactions")
