@@ -19,6 +19,7 @@ export interface Lead {
   description: string;
   generatedAt: string; // ISO date (just the date part YYYY-MM-DD)
   status: LeadStatus;
+  language?: 'pt-BR' | 'en';
 }
 
 export interface Task {

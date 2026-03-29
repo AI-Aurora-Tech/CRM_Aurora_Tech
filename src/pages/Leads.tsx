@@ -21,6 +21,16 @@ export default function Leads() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualLead, setManualLead] = useState({
+    name: '',
+    industry: '',
+    instagram: '',
+    email: '',
+    whatsapp: '',
+    description: '',
+    language: 'pt-BR' as 'pt-BR' | 'en'
+  });
 
   const dateKey = format(selectedDate, 'yyyy-MM-dd');
   const todaysLeads = leads.filter(l => l.generatedAt && l.generatedAt.startsWith(dateKey));
@@ -74,19 +84,22 @@ export default function Leads() {
     updateLead(id, { status });
   };
 
-  const getMessage = (name: string) => {
-    return `Olá, ${name}! Tudo bem?\n\nSomos a Aurora Tech, uma empresa especializada em soluções de automação e tecnologia para negócios que desejam crescer, otimizar processos e inovar.\n\nAo analisarmos o seu segmento, identificamos um grande potencial para a implementação de soluções inteligentes que podem tornar sua operação mais eficiente através da automação de atendimentos, organização de contatos e integração de canais digitais, entre outros.\n\nTudo isso de forma personalizada, de acordo com a sua realidade.\n\nGostaríamos de entender melhor suas necessidades e apresentar, sem compromisso, algumas ideias que podem gerar resultados rápidos para você.\n\nPodemos agendar uma conversa rápida?\n\nFicamos à disposição!\n\nAtenciosamente,\nEquipe Aurora Tech`;
+  const getMessage = (name: string, language?: 'pt-BR' | 'en') => {
+    if (language === 'en') {
+      return `Hi ${name} team! How are you?\n\nWe are Aurora Tech, a company specialized in automation and technology solutions for businesses that want to grow, optimize processes, and innovate.\n\nAnalyzing your segment, we identified a great potential for implementing smart solutions that can make your operation more efficient through customer service automation, contact organization, and digital channel integration, among others.\n\nAll of this personalized according to your reality.\n\nWe would like to better understand your needs and present, without commitment, some ideas that can generate quick results for you.\n\nCan we schedule a quick chat?\n\nBest regards,\nAurora Tech Team`;
+    }
+    return `Olá, equipe da ${name}! Tudo bem?\n\nSomos a Aurora Tech, uma empresa especializada em soluções de automação e tecnologia para negócios que desejam crescer, otimizar processos e inovar.\n\nAo analisarmos o seu segmento, identificamos um grande potencial para a implementação de soluções inteligentes que podem tornar sua operação mais eficiente através da automação de atendimentos, organização de contatos e integração de canais digitais, entre outros.\n\nTudo isso de forma personalizada, de acordo com a sua realidade.\n\nGostaríamos de entender melhor suas necessidades e apresentar, sem compromisso, algumas ideias que podem gerar resultados rápidos para você.\n\nPodemos agendar uma conversa rápida?\n\nFicamos à disposição!\n\nAtenciosamente,\nEquipe Aurora Tech`;
   };
 
-  const getWhatsAppLink = (phone: string, name: string) => {
+  const getWhatsAppLink = (phone: string, name: string, language?: 'pt-BR' | 'en') => {
     const cleanPhone = phone.replace(/\D/g, '');
-    const message = getMessage(name);
+    const message = getMessage(name, language);
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   };
 
-  const getEmailLink = (email: string, name: string) => {
-    const subject = `Oportunidade de parceria com a ${name}`;
-    const body = getMessage(name);
+  const getEmailLink = (email: string, name: string, language?: 'pt-BR' | 'en') => {
+    const subject = language === 'en' ? `Partnership opportunity with ${name}` : `Oportunidade de parceria com a ${name}`;
+    const body = getMessage(name, language);
     return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -95,30 +108,38 @@ export default function Leads() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Geração de Leads</h1>
-          <p className="text-slate-500 mt-2">Leads qualificados gerados diariamente pela IA.</p>
+          <p className="text-slate-500 mt-2">Leads qualificados gerados diariamente pela IA ou adicionados manualmente.</p>
         </div>
-        <button
-          onClick={handleGenerate}
-          disabled={isGenerating || todaysLeads.length >= 10}
-          className={cn(
-            "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all",
-            isGenerating || todaysLeads.length >= 10
-              ? "bg-slate-300 cursor-not-allowed"
-              : "bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500"
-          )}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Gerando...
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Gerar 10 Leads para Hoje
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsManualModalOpen(true)}
+            className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 shadow-sm transition-all"
+          >
+            Novo Lead Manual
+          </button>
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || todaysLeads.length >= 10}
+            className={cn(
+              "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all",
+              isGenerating || todaysLeads.length >= 10
+                ? "bg-slate-300 cursor-not-allowed"
+                : "bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500"
+            )}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Gerando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Gerar 10 Leads para Hoje
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -190,10 +211,10 @@ export default function Leads() {
             </h4>
             <ul className="text-xs text-indigo-700 space-y-2">
               <li>• 10 leads diários qualificados</li>
-              <li>• Com Instagram ou E-mail</li>
+              <li>• Com Instagram, WhatsApp ou E-mail reais</li>
               <li>• Sem site ou aplicativo próprio</li>
-              <li>• Foco: Escolas, Clínicas e Serviços</li>
-              <li>• Pequeno e Médio porte</li>
+              <li>• Foco: Pequenas e Médias Empresas (SMBs)</li>
+              <li>• Idioma: Português (BR) ou Inglês</li>
             </ul>
           </div>
         </div>
@@ -268,7 +289,7 @@ export default function Leads() {
                         )}
                         {lead.contact.whatsapp && (
                           <a
-                            href={getWhatsAppLink(lead.contact.whatsapp, lead.name)}
+                            href={getWhatsAppLink(lead.contact.whatsapp, lead.name, lead.language)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center px-3 py-1.5 rounded-lg bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors"
@@ -279,7 +300,7 @@ export default function Leads() {
                         )}
                         {lead.contact.email && (
                           <a
-                            href={getEmailLink(lead.contact.email, lead.name)}
+                            href={getEmailLink(lead.contact.email, lead.name, lead.language)}
                             className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors"
                           >
                             <Mail className="mr-1.5 h-3.5 w-3.5" />
@@ -305,6 +326,131 @@ export default function Leads() {
           )}
         </div>
       </div>
+
+      {/* Modal de Lead Manual */}
+      {isManualModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-800">Adicionar Lead Manual</h2>
+              <button onClick={() => setIsManualModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                X
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Empresa *</label>
+                <input
+                  type="text"
+                  required
+                  value={manualLead.name}
+                  onChange={e => setManualLead({ ...manualLead, name: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  placeholder="Ex: Padaria do João"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nicho *</label>
+                  <input
+                    type="text"
+                    required
+                    value={manualLead.industry}
+                    onChange={e => setManualLead({ ...manualLead, industry: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    placeholder="Ex: Alimentação"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Idioma</label>
+                  <select
+                    value={manualLead.language}
+                    onChange={e => setManualLead({ ...manualLead, language: e.target.value as 'pt-BR' | 'en' })}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  >
+                    <option value="pt-BR">Português (BR)</option>
+                    <option value="en">Inglês</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Instagram</label>
+                <input
+                  type="text"
+                  value={manualLead.instagram}
+                  onChange={e => setManualLead({ ...manualLead, instagram: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  placeholder="@empresa"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp</label>
+                <input
+                  type="text"
+                  value={manualLead.whatsapp}
+                  onChange={e => setManualLead({ ...manualLead, whatsapp: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  placeholder="+55 11 99999-9999"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
+                <input
+                  type="email"
+                  value={manualLead.email}
+                  onChange={e => setManualLead({ ...manualLead, email: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  placeholder="contato@empresa.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Descrição Breve</label>
+                <textarea
+                  value={manualLead.description}
+                  onChange={e => setManualLead({ ...manualLead, description: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none h-20"
+                  placeholder="Detalhes sobre o lead..."
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button
+                onClick={() => setIsManualModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!manualLead.name || !manualLead.industry) {
+                    alert('Preencha pelo menos o nome e o nicho da empresa.');
+                    return;
+                  }
+                  addLeads([{
+                    id: crypto.randomUUID(),
+                    name: manualLead.name,
+                    industry: manualLead.industry,
+                    contact: {
+                      instagram: manualLead.instagram,
+                      email: manualLead.email,
+                      whatsapp: manualLead.whatsapp
+                    },
+                    description: manualLead.description || 'Lead adicionado manualmente',
+                    generatedAt: dateKey,
+                    status: 'Novo',
+                    language: manualLead.language
+                  }]);
+                  setIsManualModalOpen(false);
+                  setManualLead({ name: '', industry: '', instagram: '', email: '', whatsapp: '', description: '', language: 'pt-BR' });
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+              >
+                Salvar Lead
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

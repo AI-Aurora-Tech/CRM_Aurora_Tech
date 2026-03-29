@@ -734,6 +734,7 @@ app.get("/api/leads", authenticateToken, async (req: any, res) => {
       description: l.description,
       generatedAt: genAt,
       status: l.status || 'Novo',
+      language: l.language || 'pt-BR',
       contact: {
         instagram: l.instagram,
         email: l.email,
@@ -806,7 +807,8 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
         whatsapp: wpp === "" ? null : wpp,
         description: l.description,
         generated_at: l.generatedAt,
-        status: status
+        status: status,
+        language: l.language || 'pt-BR'
       };
     });
   
@@ -818,8 +820,8 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
   const { error } = await supabase.from("leads").insert(leadsToInsert);
   
   if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
-    // Fallback se a coluna 'status' ou 'whatsapp' não existir ainda
-    const fallbackLeads = leadsToInsert.map(({ status, whatsapp, ...rest }) => rest);
+    // Fallback se a coluna 'status', 'whatsapp' ou 'language' não existir ainda
+    const fallbackLeads = leadsToInsert.map(({ status, whatsapp, language, ...rest }) => rest);
     const { error: retryError } = await supabase.from("leads").insert(fallbackLeads);
     if (retryError) return res.status(500).json({ error: retryError.message });
     return res.json({ success: true, warning: "Colunas novas não encontradas, leads salvos com fallback." });
@@ -844,6 +846,7 @@ app.patch("/api/leads/:id", authenticateToken, async (req: any, res) => {
   if (updates.contact?.instagram) dbUpdates.instagram = updates.contact.instagram;
   if (updates.contact?.email) dbUpdates.email = updates.contact.email;
   if (updates.contact?.whatsapp) dbUpdates.whatsapp = updates.contact.whatsapp;
+  if (updates.language) dbUpdates.language = updates.language;
 
   const { error } = await supabase
     .from("leads")

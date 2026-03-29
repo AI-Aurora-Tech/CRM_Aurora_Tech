@@ -20,26 +20,34 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
       messages: [
         {
           role: "system",
-          content: `Você é um assistente B2B especializado em prospecção. Gere 10 leads qualificados no Brasil. 
-          Para cada lead, você deve sugerir EXATAMENTE UM dos seguintes serviços que melhor se encaixa com o negócio e a dor provável:
-          - Automação do Whatsapp
-          - Sistema Financeiro
-          - Sistema de Gerenciamento completo (CRM)
-          - Aplicativo de Agendamento
-          - Criação de Site
-          - Aplicativo interno
+          content: `Você é um especialista em prospecção B2B. Sua tarefa é encontrar 10 empresas REAIS de pequeno e médio porte (SMBs) de qualquer nicho.
           
-          Retorne APENAS JSON: {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "description": "...", "suggestedService": "..."}]}`
+          CRITÉRIOS OBRIGATÓRIOS:
+          1. Idioma/Localização: Devem ser de países que falam Português Brasileiro (pt-BR) ou Inglês (en).
+          2. Dados REAIS: Você DEVE fornecer dados de contato REAIS (Instagram, WhatsApp e/ou Email). NÃO INVENTE DADOS (como contato@empresa.com ou +55 11 99999-9999). Se não souber o email ou whatsapp real, deixe em branco, mas forneça pelo menos o Instagram real ou um dos outros contatos.
+          3. Presença Digital: As empresas NÃO podem ter um site próprio ou sistema público na web ativo (pois ofereceremos isso).
+          4. Serviço Sugerido: Para cada lead, sugira EXATAMENTE UM dos seguintes serviços que resolve uma dor real deles:
+             - Automação do Whatsapp
+             - Sistema Financeiro
+             - Sistema de Gerenciamento completo (CRM)
+             - Aplicativo de Agendamento
+             - Criação de Site
+             - Aplicativo interno
+          
+          Retorne APENAS JSON no formato:
+          {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "description": "...", "suggestedService": "...", "language": "pt-BR" | "en"}]}
+          
+          Atenção: O campo 'language' deve ser 'pt-BR' ou 'en' dependendo do idioma da empresa.`
         },
         {
           role: "user",
-          content: `Gere 10 leads B2B no Brasil para ${date}. Foco: Escolas, clínicas, oficinas, padarias. Retorne exatamente 10.`
+          content: `Gere 10 leads B2B reais (SMBs sem site) para prospecção hoje (${date}). Lembre-se: DADOS REAIS, nada de placeholders. Retorne exatamente 10.`
         }
       ],
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       response_format: { type: "json_object" },
-      max_tokens: 1500,
-      temperature: 0.7
+      max_tokens: 2500,
+      temperature: 0.4
     });
 
     const content = completion.choices[0].message.content;
@@ -59,7 +67,8 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
       },
       description: `${l.description || "Lead gerado por IA"}\n\n💡 Serviço Sugerido: ${l.suggestedService || "Consultoria Digital"}`,
       generatedAt: date,
-      status: 'Novo'
+      status: 'Novo',
+      language: l.language || 'pt-BR'
     }));
 
   } catch (error: any) {
