@@ -5,6 +5,8 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { cn } from '../lib/utils';
 
 const STATUS_CONFIG: Record<ProjectStatus, { color: string; icon: any }> = {
+  'Noticia': { color: 'bg-purple-100 text-purple-700', icon: Circle },
+  'Posts': { color: 'bg-pink-100 text-pink-700', icon: Circle },
   'Planejamento': { color: 'bg-slate-100 text-slate-600', icon: Circle },
   'Em Andamento': { color: 'bg-blue-100 text-blue-700', icon: Clock },
   'Revisão': { color: 'bg-amber-100 text-amber-700', icon: AlertCircle },
@@ -14,6 +16,8 @@ const STATUS_CONFIG: Record<ProjectStatus, { color: string; icon: any }> = {
 export default function Projects() {
   const { projects, addProject, updateProject, deleteProject, toggleTask, addTask, updateTask, deleteTask } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [preSelectedStatus, setPreSelectedStatus] = useState<ProjectStatus | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<ProjectStatus>('Planejamento');
   const [isCreating, setIsCreating] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -25,29 +29,45 @@ export default function Projects() {
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || null;
 
-  const columns: ProjectStatus[] = ['Planejamento', 'Em Andamento', 'Revisão', 'Concluído'];
+  const columns: ProjectStatus[] = ['Noticia', 'Posts', 'Planejamento', 'Em Andamento', 'Revisão', 'Concluído'];
 
   const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsCreating(true);
     try {
       const formData = new FormData(e.currentTarget);
+      const status = (formData.get('status') as ProjectStatus) || 'Planejamento';
+      
+      const name = (formData.get('name') as string) || (status === 'Noticia' ? `Notícia: ${formData.get('source') || 'Sem Fonte'}` : 'Novo Projeto');
+      const clientName = (formData.get('clientName') as string) || 'Interno';
+      const description = (formData.get('description') as string) || (status === 'Noticia' ? 'Notícia pendente de revisão' : status === 'Posts' ? 'Post pendente de revisão' : '');
+      const dueDate = (formData.get('dueDate') as string) || (formData.get('publishDate') as string) || new Date().toISOString().split('T')[0];
+
       await addProject({
-        name: formData.get('name') as string,
-        clientName: formData.get('clientName') as string,
-        description: formData.get('description') as string,
-        status: 'Planejamento',
-        dueDate: formData.get('dueDate') as string,
+        name,
+        clientName,
+        description,
+        status,
+        dueDate,
         assignedTo: ['Você'],
         progress: 0,
-        value: Number(formData.get('value')),
+        value: Number(formData.get('value') || 0),
         tasks: [],
-        paymentMethod: formData.get('paymentMethod') as string,
-        paymentDetails: formData.get('paymentDetails') as string,
-        implementationFee: Number(formData.get('implementationFee')),
-        monthlyFee: Number(formData.get('monthlyFee')),
+        paymentMethod: (formData.get('paymentMethod') as string) || 'N/A',
+        paymentDetails: (formData.get('paymentDetails') as string) || '',
+        implementationFee: Number(formData.get('implementationFee') || 0),
+        monthlyFee: Number(formData.get('monthlyFee') || 0),
         isRecurring: formData.get('isRecurring') === 'on',
         isCanceled: formData.get('isCanceled') === 'on',
+        // News fields
+        source: formData.get('source') as string,
+        newsPlot: formData.get('newsPlot') as string,
+        postIdea: formData.get('postIdea') as string,
+        // Post fields
+        socialMedia: formData.get('socialMedia') as string,
+        imageIdea: formData.get('imageIdea') as string,
+        postContext: formData.get('postContext') as string,
+        publishDate: formData.get('publishDate') as string,
       });
       setIsModalOpen(false);
     } catch (error: any) {
@@ -76,6 +96,15 @@ export default function Projects() {
         monthlyFee: Number(formData.get('monthlyFee')),
         isRecurring: formData.get('isRecurring') === 'on',
         isCanceled: formData.get('isCanceled') === 'on',
+        // News fields
+        source: formData.get('source') as string,
+        newsPlot: formData.get('newsPlot') as string,
+        postIdea: formData.get('postIdea') as string,
+        // Post fields
+        socialMedia: formData.get('socialMedia') as string,
+        imageIdea: formData.get('imageIdea') as string,
+        postContext: formData.get('postContext') as string,
+        publishDate: formData.get('publishDate') as string,
       });
       setIsEditingProject(false);
     } catch (error: any) {
@@ -109,7 +138,11 @@ export default function Projects() {
           <p className="text-slate-500 mt-1">Gerencie o ciclo de vida dos projetos e atribuições da equipe.</p>
         </div>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { 
+            setPreSelectedStatus(null); 
+            setSelectedStatus('Planejamento');
+            setIsModalOpen(true); 
+          }}
           className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -132,15 +165,32 @@ export default function Projects() {
                     <div className="p-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-slate-50/95 backdrop-blur-sm rounded-t-xl z-10">
                       <div className="flex items-center space-x-2">
                         <span className={cn("h-2 w-2 rounded-full", 
+                          status === 'Noticia' ? "bg-purple-500" :
+                          status === 'Posts' ? "bg-pink-500" :
                           status === 'Planejamento' ? "bg-slate-400" :
                           status === 'Em Andamento' ? "bg-blue-500" :
                           status === 'Revisão' ? "bg-amber-500" : "bg-emerald-500"
                         )} />
                         <h3 className="font-semibold text-slate-700 text-sm uppercase tracking-wide">{status}</h3>
                       </div>
-                      <span className="text-xs font-medium text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-100">
-                        {projects.filter(p => p.status === status).length}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        {(status === 'Noticia' || status === 'Posts') && (
+                          <button 
+                            onClick={() => { 
+                              setPreSelectedStatus(status); 
+                              setSelectedStatus(status);
+                              setIsModalOpen(true); 
+                            }}
+                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            title={`Adicionar ${status}`}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        )}
+                        <span className="text-xs font-medium text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-100">
+                          {projects.filter(p => p.status === status).length}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="p-3 space-y-3 overflow-y-auto flex-1">
@@ -175,10 +225,27 @@ export default function Projects() {
                                     <CheckSquare className="mr-1 h-3 w-3" />
                                     {(project.tasks || []).filter(t => t.completed).length}/{(project.tasks || []).length} Tarefas
                                   </div>
-                                  <div className="flex items-center text-xs text-indigo-600 font-medium hover:underline">
-                                    Gerenciar
-                                    <ChevronRight className="ml-0.5 h-3 w-3" />
-                                  </div>
+                                  {(project.status === 'Noticia' || project.status === 'Posts') ? (
+                                    <div className="flex gap-1">
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Planejamento', isApproved: true, isDenied: false }); }}
+                                        className="text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
+                                      >
+                                        Aprovar
+                                      </button>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); updateProject(project.id, { isCanceled: true, isDenied: true, isApproved: false }); }}
+                                        className="text-[10px] font-bold text-red-600 hover:bg-red-50 px-1.5 py-0.5 rounded border border-red-100"
+                                      >
+                                        Negar
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center text-xs text-indigo-600 font-medium hover:underline">
+                                      Gerenciar
+                                      <ChevronRight className="ml-0.5 h-3 w-3" />
+                                    </div>
+                                  )}
                                 </div>
                                 
                                 <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -218,10 +285,53 @@ export default function Projects() {
                         <input name="clientName" defaultValue={selectedProject.clientName} required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm p-2 border" />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-700">Nome do Projeto</label>
+                        <label className="block text-xs font-medium text-slate-700">Nome do Projeto / Título</label>
                         <input name="name" defaultValue={selectedProject.name} required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm p-2 border" />
                       </div>
                     </div>
+
+                    {selectedProject.status === 'Noticia' && (
+                      <div className="space-y-4 border-l-2 border-purple-200 pl-4 py-2">
+                        <div>
+                          <label className="block text-xs font-medium text-purple-700">Fonte</label>
+                          <input name="source" defaultValue={selectedProject.source} className="mt-1 block w-full rounded-md border-purple-200 shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm p-2 border" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-purple-700">Enredo da Notícia</label>
+                          <textarea name="newsPlot" defaultValue={selectedProject.newsPlot} className="mt-1 block w-full rounded-md border-purple-200 shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm p-2 border" rows={2} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-purple-700">Ideia de Post sobre a Notícia</label>
+                          <textarea name="postIdea" defaultValue={selectedProject.postIdea} className="mt-1 block w-full rounded-md border-purple-200 shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm p-2 border" rows={2} />
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedProject.status === 'Posts' && (
+                      <div className="space-y-4 border-l-2 border-pink-200 pl-4 py-2">
+                        <div>
+                          <label className="block text-xs font-medium text-pink-700">Rede Social</label>
+                          <select name="socialMedia" defaultValue={selectedProject.socialMedia} className="mt-1 block w-full rounded-md border-pink-200 shadow-sm focus:border-pink-500 focus:ring-pink-500 text-sm p-2 border">
+                            <option value="Instagram">Instagram</option>
+                            <option value="LinkedIn">LinkedIn</option>
+                            <option value="TikTok">TikTok</option>
+                            <option value="Todas">Todas</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-pink-700">Ideia de Imagem</label>
+                          <textarea name="imageIdea" defaultValue={selectedProject.imageIdea} className="mt-1 block w-full rounded-md border-pink-200 shadow-sm focus:border-pink-500 focus:ring-pink-500 text-sm p-2 border" rows={2} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-pink-700">Contexto do Post</label>
+                          <textarea name="postContext" defaultValue={selectedProject.postContext} className="mt-1 block w-full rounded-md border-pink-200 shadow-sm focus:border-pink-500 focus:ring-pink-500 text-sm p-2 border" rows={2} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-pink-700">Data de Publicação</label>
+                          <input name="publishDate" type="date" defaultValue={selectedProject.publishDate} className="mt-1 block w-full rounded-md border-pink-200 shadow-sm focus:border-pink-500 focus:ring-pink-500 text-sm p-2 border" />
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-medium text-slate-700">Descrição</label>
                       <textarea name="description" defaultValue={selectedProject.description} required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm p-2 border" />
@@ -456,74 +566,151 @@ export default function Projects() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Novo Projeto</h3>
+            <h3 className="text-lg font-semibold mb-4">
+              {selectedStatus === 'Noticia' ? 'Noticia' : selectedStatus === 'Posts' ? 'Post' : 'Novo Projeto'}
+            </h3>
             <form
               onSubmit={handleCreateProject}
               className="space-y-4"
             >
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Nome da Empresa</label>
-                  <input name="clientName" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Nome do Projeto</label>
-                  <input name="name" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Descrição Breve</label>
-                <textarea name="description" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Valor Cobrado (R$)</label>
-                  <input name="value" type="number" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Data de Finalização</label>
-                  <input name="dueDate" type="date" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-                </div>
-              </div>
+              {/* Status Selection (Hidden if pre-selected, but we need it for the form) */}
+              <input type="hidden" name="status" value={selectedStatus} />
 
-              <div className="border-t border-slate-100 pt-4 mt-4">
-                <h4 className="text-sm font-medium text-slate-900 mb-3">Detalhes Financeiros</h4>
-                <div className="grid grid-cols-2 gap-4">
+              {selectedStatus === 'Planejamento' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Nome da Empresa</label>
+                      <input name="clientName" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Nome do Projeto / Título</label>
+                      <input name="name" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Tipo / Status Inicial</label>
+                      <select 
+                        defaultValue={preSelectedStatus || "Planejamento"}
+                        onChange={(e) => setSelectedStatus(e.target.value as ProjectStatus)}
+                        className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+                      >
+                        <option value="Noticia">Notícia</option>
+                        <option value="Posts">Posts</option>
+                        <option value="Planejamento">Planejamento</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Data de Finalização</label>
+                      <input name="dueDate" type="date" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Conditional Fields for News */}
+              {selectedStatus === 'Noticia' && (
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Método de Pagamento</label>
-                    <select name="paymentMethod" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
-                      <option value="Boleto">Boleto</option>
-                      <option value="Cartão de Crédito">Cartão de Crédito</option>
-                      <option value="Cartão de Débito">Cartão de Débito</option>
-                      <option value="PIX">PIX</option>
+                    <label className="block text-sm font-medium text-slate-700">Fonte</label>
+                    <input name="source" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Enredo da Notícia</label>
+                    <textarea name="newsPlot" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" rows={3} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Ideia de Post sobre a Notícia</label>
+                    <textarea name="postIdea" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" rows={3} />
+                  </div>
+                </div>
+              )}
+
+              {/* Conditional Fields for Posts */}
+              {selectedStatus === 'Posts' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Título</label>
+                    <input name="name" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Rede social que irá postar</label>
+                    <select name="socialMedia" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                      <option value="Instagram">Instagram</option>
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="TikTok">TikTok</option>
+                      <option value="Todas">Todas</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Detalhes (ex: 3x sem juros)</label>
-                    <input name="paymentDetails" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">Taxa de Implementação (R$)</label>
-                    <input name="implementationFee" type="number" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    <label className="block text-sm font-medium text-slate-700">Ideia de Imagem</label>
+                    <textarea name="imageIdea" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" rows={3} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Mensalidade (R$)</label>
-                    <input name="monthlyFee" type="number" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    <label className="block text-sm font-medium text-slate-700">Contexto do Post</label>
+                    <textarea name="postContext" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" rows={3} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Data que será publicado</label>
+                    <input name="publishDate" type="date" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
                   </div>
                 </div>
-                <div className="flex items-center space-x-6 mt-4">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" name="isRecurring" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" />
-                    <span className="text-sm font-medium text-slate-700">Pagamento Recorrente</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" name="isCanceled" className="rounded border-slate-300 text-red-600 focus:ring-red-500 h-4 w-4" />
-                    <span className="text-sm font-medium text-slate-700">Projeto Cancelado</span>
-                  </label>
-                </div>
-              </div>
+              )}
+
+              {selectedStatus === 'Planejamento' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Descrição Breve</label>
+                    <textarea name="description" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Valor Cobrado (R$)</label>
+                      <input name="value" type="number" required className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4 mt-4">
+                    <h4 className="text-sm font-medium text-slate-900 mb-3">Detalhes Financeiros</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Método de Pagamento</label>
+                        <select name="paymentMethod" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                          <option value="Boleto">Boleto</option>
+                          <option value="Cartão de Crédito">Cartão de Crédito</option>
+                          <option value="Cartão de Débito">Cartão de Débito</option>
+                          <option value="PIX">PIX</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Detalhes (ex: 3x sem juros)</label>
+                        <input name="paymentDetails" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Taxa de Implementação (R$)</label>
+                        <input name="implementationFee" type="number" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Mensalidade (R$)</label>
+                        <input name="monthlyFee" type="number" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" />
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-6 mt-4">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" name="isRecurring" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" />
+                        <span className="text-sm font-medium text-slate-700">Pagamento Recorrente</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" name="isCanceled" className="rounded border-slate-300 text-red-600 focus:ring-red-500 h-4 w-4" />
+                        <span className="text-sm font-medium text-slate-700">Projeto Cancelado</span>
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
               
               <div className="flex justify-end space-x-3 mt-6">
                 <button
@@ -545,7 +732,7 @@ export default function Projects() {
                       Criando...
                     </>
                   ) : (
-                    'Criar Projeto'
+                    selectedStatus === 'Noticia' ? 'Noticia' : selectedStatus === 'Posts' ? 'Post' : 'Criar Projeto'
                   )}
                 </button>
               </div>

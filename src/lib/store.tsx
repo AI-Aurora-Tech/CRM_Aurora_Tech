@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // --- Types ---
 
-export type ProjectStatus = 'Planejamento' | 'Em Andamento' | 'Revisão' | 'Concluído';
+export type ProjectStatus = 'Planejamento' | 'Em Andamento' | 'Revisão' | 'Concluído' | 'Noticia' | 'Posts';
 
 export type LeadStatus = 'Novo' | 'Primeiro Contato' | 'Em Negociação' | 'Resposta Positiva' | 'Resposta Negativa' | 'Convertido';
 
@@ -46,6 +46,18 @@ export interface Project {
   monthlyFee?: number;
   isRecurring?: boolean;
   isCanceled?: boolean;
+  // News specific fields
+  source?: string;
+  newsPlot?: string;
+  postIdea?: string;
+  // Post specific fields
+  socialMedia?: string;
+  imageIdea?: string;
+  postContext?: string;
+  publishDate?: string;
+  // Approval status
+  isApproved?: boolean;
+  isDenied?: boolean;
 }
 
 export type PaymentMethod = 'Boleto' | 'Cartão de Crédito' | 'Cartão de Débito' | 'PIX';

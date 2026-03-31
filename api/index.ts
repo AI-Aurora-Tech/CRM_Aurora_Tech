@@ -266,6 +266,15 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
       monthlyFee: p.monthly_fee,
       isRecurring: !!p.is_recurring,
       isCanceled: !!p.is_canceled,
+      source: p.source,
+      newsPlot: p.news_plot,
+      postIdea: p.post_idea,
+      socialMedia: p.social_media,
+      imageIdea: p.image_idea,
+      postContext: p.post_context,
+      publishDate: p.publish_date,
+      isApproved: !!p.is_approved,
+      isDenied: !!p.is_denied,
       tasks: (tasks || []).map((t: any) => ({ ...t, completed: !!t.completed })),
       assignedTo: ['Você'] // Default value since column is missing in DB
     };
@@ -275,7 +284,11 @@ app.get("/api/projects", authenticateToken, async (req: any, res) => {
 });
 
 app.post("/api/projects", authenticateToken, async (req: any, res) => {
-  const { name, clientName, description, status, dueDate, progress, value, tasks, paymentMethod, paymentDetails, implementationFee, monthlyFee, isRecurring, isCanceled } = req.body;
+  const { 
+    name, clientName, description, status, dueDate, progress, value, tasks, 
+    paymentMethod, paymentDetails, implementationFee, monthlyFee, isRecurring, isCanceled,
+    source, newsPlot, postIdea, socialMedia, imageIdea, postContext, publishDate, isApproved, isDenied
+  } = req.body;
   const projectId = uuidv4();
   
   console.log("Tentando criar projeto:", { name, clientName, projectId, userId: req.user.id });
@@ -295,7 +308,16 @@ app.post("/api/projects", authenticateToken, async (req: any, res) => {
     implementation_fee: implementationFee,
     monthly_fee: monthlyFee,
     is_recurring: !!isRecurring,
-    is_canceled: !!isCanceled
+    is_canceled: !!isCanceled,
+    source,
+    news_plot: newsPlot,
+    post_idea: postIdea,
+    social_media: socialMedia,
+    image_idea: imageIdea,
+    post_context: postContext,
+    publish_date: publishDate,
+    is_approved: !!isApproved,
+    is_denied: !!isDenied
   };
 
   let { error: pError } = await supabase.from("projects").insert(projectData);
@@ -360,6 +382,15 @@ app.patch("/api/projects/:id", authenticateToken, async (req: any, res) => {
   if (updates.monthlyFee !== undefined) dbUpdates.monthly_fee = updates.monthlyFee;
   if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
   if (updates.isCanceled !== undefined) dbUpdates.is_canceled = updates.isCanceled;
+  if (updates.source !== undefined) dbUpdates.source = updates.source;
+  if (updates.newsPlot !== undefined) dbUpdates.news_plot = updates.newsPlot;
+  if (updates.postIdea !== undefined) dbUpdates.post_idea = updates.postIdea;
+  if (updates.socialMedia !== undefined) dbUpdates.social_media = updates.socialMedia;
+  if (updates.imageIdea !== undefined) dbUpdates.image_idea = updates.imageIdea;
+  if (updates.postContext !== undefined) dbUpdates.post_context = updates.postContext;
+  if (updates.publishDate !== undefined) dbUpdates.publish_date = updates.publishDate;
+  if (updates.isApproved !== undefined) dbUpdates.is_approved = updates.isApproved;
+  if (updates.isDenied !== undefined) dbUpdates.is_denied = updates.isDenied;
 
   let { error } = await supabase
     .from("projects")
