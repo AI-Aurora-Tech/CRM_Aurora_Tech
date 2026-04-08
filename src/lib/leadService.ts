@@ -20,34 +20,36 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
       messages: [
         {
           role: "system",
-          content: `Você é um especialista em prospecção B2B. Sua tarefa é encontrar 10 empresas REAIS de pequeno e médio porte (SMBs) de qualquer nicho.
+          content: `Você é um especialista em prospecção B2B e pesquisa de mercado. Sua tarefa é encontrar 10 empresas REAIS de pequeno e médio porte (SMBs) no Brasil.
           
           CRITÉRIOS OBRIGATÓRIOS:
-          1. Idioma/Localização: Devem ser de países que falam Português Brasileiro (pt-BR) ou Inglês (en).
-          2. Dados REAIS: Você DEVE fornecer dados de contato REAIS (Instagram, WhatsApp e/ou Email). NÃO INVENTE DADOS (como contato@empresa.com ou +55 11 99999-9999). Se não souber o email ou whatsapp real, deixe em branco, mas forneça pelo menos o Instagram real ou um dos outros contatos.
-          3. Presença Digital: As empresas NÃO podem ter um site próprio ou sistema público na web ativo (pois ofereceremos isso).
-          4. Serviço Sugerido: Para cada lead, sugira EXATAMENTE UM dos seguintes serviços que resolve uma dor real deles:
-             - Automação do Whatsapp
-             - Sistema Financeiro
-             - Sistema de Gerenciamento completo (CRM)
-             - Aplicativo de Agendamento
-             - Criação de Site
-             - Aplicativo interno
+          1. Localização: Devem ser estabelecimentos no Brasil.
+          2. Dados de Contato: Priorize empresas que tenham WhatsApp e/ou E-mail. Se tiver Instagram, ele DEVE ter sido movimentado em 2026 (não mande contas inativas).
+          3. Sem Site: As empresas NÃO podem ter um site registrado no Google ou Google Maps (pois ofereceremos o serviço de criação de sites).
+          4. Google Maps: Forneça o link do Google Maps para o estabelecimento.
+          5. Dados REAIS: Forneça WhatsApp, E-mail e Instagram REAIS. Se encontrar os três, é o ideal. NÃO INVENTE DADOS.
+          6. Serviço Sugerido: Como o foco agora é também venda de sites, priorize "Criação de Site" como serviço sugerido para empresas que não o possuem.
           
           Retorne APENAS JSON no formato:
-          {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "description": "...", "suggestedService": "...", "language": "pt-BR" | "en"}]}
+          {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR"}]}
           
-          Atenção: O campo 'language' deve ser 'pt-BR' ou 'en' dependendo do idioma da empresa.`
+          Atenção: O campo 'language' deve ser 'pt-BR' para empresas no Brasil.`
         },
         {
           role: "user",
-          content: `Gere 10 leads B2B reais (SMBs sem site) para prospecção hoje (${date}). Lembre-se: DADOS REAIS, nada de placeholders. Retorne exatamente 10.`
+          content: `Gere 10 leads B2B reais no Brasil (SMBs sem site no Google Maps) para prospecção hoje (${date}). 
+          Requisitos: 
+          - Devem ter WhatsApp ou E-mail.
+          - Se tiver Instagram, deve estar ativo em 2026.
+          - Inclua o link do Google Maps.
+          - Foco em venda de sites e automação.
+          Retorne exatamente 10 leads reais.`
         }
       ],
       model: "gpt-4o",
       response_format: { type: "json_object" },
-      max_tokens: 2500,
-      temperature: 0.4
+      max_tokens: 3000,
+      temperature: 0.5
     });
 
     const content = completion.choices[0].message.content;
@@ -64,8 +66,9 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
         instagram: l.instagram || "",
         email: l.email || "",
         whatsapp: l.whatsapp || "",
+        googleMapsLink: l.googleMapsLink || "",
       },
-      description: `${l.description || "Lead gerado por IA"}\n\n💡 Serviço Sugerido: ${l.suggestedService || "Consultoria Digital"}`,
+      description: `${l.description || "Lead gerado por IA"}\n\n💡 Serviço Sugerido: ${l.suggestedService || "Criação de Site"}`,
       generatedAt: date,
       status: 'Novo',
       language: l.language || 'pt-BR'

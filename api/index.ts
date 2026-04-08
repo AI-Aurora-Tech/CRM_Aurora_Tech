@@ -769,7 +769,8 @@ app.get("/api/leads", authenticateToken, async (req: any, res) => {
       contact: {
         instagram: l.instagram,
         email: l.email,
-        whatsapp: l.whatsapp
+        whatsapp: l.whatsapp,
+        googleMapsLink: l.google_maps_link
       }
     };
   });
@@ -827,6 +828,7 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
       
       const validStatuses = ['Novo', 'Em Contato', 'Em Negociação', 'Resposta Negativa', 'Convertido'];
       const status = validStatuses.includes(l.status) ? l.status : 'Novo';
+      const googleMapsLink = l.contact?.googleMapsLink || l.googleMapsLink || null;
 
       return {
         id: l.id || uuidv4(),
@@ -836,6 +838,7 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
         instagram: insta === "" ? null : insta,
         email: mail === "" ? null : mail,
         whatsapp: wpp === "" ? null : wpp,
+        google_maps_link: googleMapsLink,
         description: l.description,
         generated_at: l.generatedAt,
         status: status,
@@ -850,9 +853,9 @@ app.post("/api/leads", authenticateToken, async (req: any, res) => {
   console.log("LEADS TO INSERT:", JSON.stringify(leadsToInsert, null, 2));
   const { error } = await supabase.from("leads").insert(leadsToInsert);
   
-  if (error && (error.message.includes("column") || error.message.includes("schema cache"))) {
-    // Fallback se a coluna 'status', 'whatsapp' ou 'language' não existir ainda
-    const fallbackLeads = leadsToInsert.map(({ status, whatsapp, language, ...rest }) => rest);
+  if (error && (error.message.includes("column") || error.message.includes("schema cache") || error.message.includes("google_maps_link"))) {
+    // Fallback se a coluna 'status', 'whatsapp', 'language' ou 'google_maps_link' não existir ainda
+    const fallbackLeads = leadsToInsert.map(({ status, whatsapp, language, google_maps_link, ...rest }: any) => rest);
     const { error: retryError } = await supabase.from("leads").insert(fallbackLeads);
     if (retryError) return res.status(500).json({ error: retryError.message });
     return res.json({ success: true, warning: "Colunas novas não encontradas, leads salvos com fallback." });
