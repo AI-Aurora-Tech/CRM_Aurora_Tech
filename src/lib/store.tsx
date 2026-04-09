@@ -116,6 +116,7 @@ interface AppContextType extends AppState {
   addLeads: (leads: Lead[]) => Promise<void>;
   updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
   deleteLead: (id: string) => Promise<void>;
+  deleteLeadsByDate: (date: string) => Promise<void>;
   toggleTask: (projectId: string, taskId: string) => Promise<void>;
   addTask: (projectId: string, task: Omit<Task, 'id'>) => Promise<void>;
   updateTask: (projectId: string, taskId: string, updates: Partial<Task>) => Promise<void>;
@@ -664,6 +665,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteLeadsByDate = async (date: string) => {
+    setState(prev => ({
+      ...prev,
+      leads: prev.leads.filter(l => l.generatedAt !== date)
+    }));
+
+    try {
+      const res = await fetch(`/api/leads/by-date/${date}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Falha ao deletar leads por data');
+    } catch (error) {
+      console.error(error);
+      fetchData();
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -685,6 +704,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addLeads,
         updateLead,
         deleteLead,
+        deleteLeadsByDate,
         toggleTask,
         addTask,
         updateTask,

@@ -901,6 +901,18 @@ app.delete("/api/leads/:id", authenticateToken, async (req: any, res) => {
   res.json({ success: true });
 });
 
+app.delete("/api/leads/by-date/:date", authenticateToken, async (req: any, res) => {
+  const { date } = req.params;
+  const { error } = await supabase
+    .from("leads")
+    .delete()
+    .eq("user_id", req.user.id)
+    .eq("generated_at", date);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // Vite middleware for development
 if (process.env.NODE_ENV !== "production") {
   const { createServer: createViteServer } = await import("vite");

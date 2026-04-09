@@ -20,30 +20,31 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
       messages: [
         {
           role: "system",
-          content: `Você é um especialista em prospecção B2B e pesquisa de mercado. Sua tarefa é encontrar 10 empresas REAIS de pequeno e médio porte (SMBs) no Brasil.
+          content: `Você é um gerador de dados de demonstração. Sua tarefa é CRIAR 10 exemplos de leads B2B para preencher um sistema de demonstração.
           
-          CRITÉRIOS OBRIGATÓRIOS:
-          1. Localização: Devem ser estabelecimentos no Brasil.
-          2. Dados de Contato: Priorize empresas que tenham WhatsApp e/ou E-mail. Se tiver Instagram, ele DEVE ter sido movimentado em 2026 (não mande contas inativas).
-          3. Sem Site: As empresas NÃO podem ter um site registrado no Google ou Google Maps (pois ofereceremos o serviço de criação de sites).
-          4. Google Maps: Forneça o link do Google Maps para o estabelecimento.
-          5. Dados REAIS: Forneça WhatsApp, E-mail e Instagram REAIS. Se encontrar os três, é o ideal. NÃO INVENTE DADOS.
-          6. Serviço Sugerido: Como o foco agora é também venda de sites, priorize "Criação de Site" como serviço sugerido para empresas que não o possuem.
+          CRITÉRIOS:
+          1. Localização: Misture empresas fictícias do Brasil e de países de língua inglesa.
+          2. Dados de Contato: Use dados GENÉRICOS DE DEMONSTRAÇÃO. 
+             - WhatsApp: +55 11 99999-0001, +1 555-0101, etc.
+             - E-mail: contato@empresaexemplo.com.br, info@examplebusiness.com
+             - Instagram: @empresa_exemplo_demo
+          3. Google Maps: Crie um link de busca genérico (ex: https://www.google.com/maps/search/?api=1&query=Empresa+Exemplo).
+          4. Serviço Sugerido: Sugira um serviço de tecnologia (ex: App de agendamento, Sistema de Gerenciamento, Criação de Site).
           
           Retorne APENAS JSON no formato:
-          {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR"}]}
+          {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR" | "en"}]}
           
-          Atenção: O campo 'language' deve ser 'pt-BR' para empresas no Brasil.`
+          Atenção: O campo 'language' deve refletir o idioma do país da empresa.`
         },
         {
           role: "user",
-          content: `Gere 10 leads B2B reais no Brasil (SMBs sem site no Google Maps) para prospecção hoje (${date}). 
+          content: `Gere 10 leads B2B de demonstração (Brasil e países de língua inglesa) para a data ${date}. 
           Requisitos: 
-          - Devem ter WhatsApp ou E-mail.
-          - Se tiver Instagram, deve estar ativo em 2026.
-          - Inclua o link do Google Maps.
-          - Foco em venda de sites e automação.
-          Retorne exatamente 10 leads reais.`
+          - Simule SMBs sem site/app.
+          - Preencha WhatsApp, E-mail e Instagram com dados genéricos de teste.
+          - Inclua link de busca do Google Maps.
+          - Sugira um serviço de tecnologia específico.
+          Retorne exatamente 10 leads no formato JSON.`
         }
       ],
       model: "gpt-4o",

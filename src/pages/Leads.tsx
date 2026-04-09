@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp, LeadStatus } from '../lib/store';
 import { generateDailyLeads } from '../lib/leadService';
-import { format, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, addMonths, subMonths } from 'date-fns';
+import { format, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, addMonths, subMonths, isAfter, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Search, Instagram, Mail, Building2, Loader2, Sparkles, AlertCircle, Trash2, MessageCircle, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Instagram, Mail, Building2, Loader2, Sparkles, AlertCircle, Trash2, MessageCircle, MapPin, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
 
 const STATUS_COLORS: Record<LeadStatus, string> = {
   'Novo': 'bg-slate-100 text-slate-700 border-slate-200',
@@ -16,10 +17,11 @@ const STATUS_COLORS: Record<LeadStatus, string> = {
 };
 
 export default function Leads() {
-  const { leads, addLeads, updateLead, deleteLead } = useApp();
+  const { leads, addLeads, updateLead, deleteLead, deleteLeadsByDate } = useApp();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [manualLead, setManualLead] = useState({
@@ -56,28 +58,48 @@ export default function Leads() {
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError(null);
+    setProgress(0);
+
+    // Symbolic progress bar animation
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 95) return prev;
+        return prev + Math.random() * 15;
+      });
+    }, 800);
+
     try {
+      // Se já existem leads para esta data, perguntar se deseja regenerar
+      if (todaysLeads.length > 0) {
+        const confirmRegen = confirm(`Já existem ${todaysLeads.length} leads para esta data. Deseja apagar os atuais e gerar novos?`);
+        if (!confirmRegen) {
+          setIsGenerating(false);
+          clearInterval(progressInterval);
+          return;
+        }
+        await deleteLeadsByDate(dateKey);
+      }
+
+      // Pequeno delay para garantir que o estado de deleteLeadsByDate foi processado e a UI atualizou
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const newLeads = await generateDailyLeads(dateKey);
       
-      // Filtrar duplicatas localmente antes de adicionar
-      const existingNames = new Set(leads.map(l => l.name.toLowerCase()));
-      const filteredLeads = newLeads.filter(l => !existingNames.has(l.name.toLowerCase()));
-      
-      if (filteredLeads.length > 0) {
-        // Garantir que todos os novos leads tenham status 'Novo'
-        const leadsWithStatus = filteredLeads.map(l => ({ ...l, status: 'Novo' as LeadStatus }));
+      if (newLeads.length > 0) {
+        const leadsWithStatus = newLeads.map(l => ({ ...l, status: 'Novo' as LeadStatus }));
         await addLeads(leadsWithStatus);
-        
-        if (filteredLeads.length < newLeads.length) {
-          setError(`${newLeads.length - filteredLeads.length} leads duplicados foram ignorados.`);
-        }
-      } else if (newLeads.length > 0) {
-        setError("Todos os leads gerados já existem na sua lista.");
+        setProgress(100);
+      } else {
+        setError("Nenhum lead foi gerado pela IA. Tente novamente.");
       }
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro ao gerar leads.");
     } finally {
-      setIsGenerating(false);
+      clearInterval(progressInterval);
+      setTimeout(() => {
+        setIsGenerating(false);
+        setProgress(0);
+      }, 500);
     }
   };
 
@@ -120,10 +142,10 @@ export default function Leads() {
           </button>
           <button
             onClick={handleGenerate}
-            disabled={isGenerating || todaysLeads.length >= 10}
+            disabled={isGenerating || isAfter(startOfDay(selectedDate), startOfDay(new Date()))}
             className={cn(
               "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition-all",
-              isGenerating || todaysLeads.length >= 10
+              isGenerating || isAfter(startOfDay(selectedDate), startOfDay(new Date()))
                 ? "bg-slate-300 cursor-not-allowed"
                 : "bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500"
             )}
@@ -133,15 +155,57 @@ export default function Leads() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Gerando...
               </>
+            ) : todaysLeads.length > 0 ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Regenerar Leads
+              </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Gerar 10 Leads para Hoje
+                Gerar 10 Leads para {isSameDay(selectedDate, new Date()) ? 'Hoje' : format(selectedDate, 'dd/MM')}
               </>
             )}
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {isGenerating && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="w-full bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center">
+                  <Sparkles className="h-5 w-5 text-indigo-600 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">IA Aurora está buscando leads...</h3>
+                  <p className="text-xs text-slate-500">Analisando empresas reais sem site no Google Maps</p>
+                </div>
+              </div>
+              <span className="text-sm font-bold text-indigo-600">{Math.round(progress)}%</span>
+            </div>
+            <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-indigo-600"
+                initial={{ width: "0%" }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.5 }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+              <span>Iniciando pesquisa</span>
+              <span>Validando contatos</span>
+              <span>Finalizando lista</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {error && (
         <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3 text-amber-700 text-sm">
@@ -179,15 +243,18 @@ export default function Leads() {
                   const hasLeads = leads.some(l => l.generatedAt && l.generatedAt.startsWith(format(day, 'yyyy-MM-dd')));
                   const isSelected = isSameDay(day, selectedDate);
                   const isCurrentMonth = isSameMonth(day, currentMonth);
+                  const isFuture = isAfter(startOfDay(day), startOfDay(new Date()));
 
                   return (
                     <button
                       key={idx}
-                      onClick={() => setSelectedDate(day)}
+                      onClick={() => !isFuture && setSelectedDate(day)}
+                      disabled={isFuture}
                       className={cn(
                         "h-8 w-full rounded-md flex flex-col items-center justify-center text-xs relative transition-all",
                         isSelected ? "bg-indigo-600 text-white font-bold" : "hover:bg-slate-50 text-slate-700",
-                        !isCurrentMonth && "opacity-30",
+                        (!isCurrentMonth || isFuture) && "opacity-30",
+                        isFuture && "cursor-not-allowed",
                         hasLeads && !isSelected && "text-indigo-600 font-semibold"
                       )}
                     >
