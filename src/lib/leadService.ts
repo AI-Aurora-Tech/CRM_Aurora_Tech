@@ -21,16 +21,19 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
         {
           role: "system",
           content: `Você é um especialista em prospecção B2B focado EXCLUSIVAMENTE no BRASIL.
-          Sua tarefa é listar EXATAMENTE 10 empresas REAIS no Brasil.
+          Sua tarefa é listar EXATAMENTE 10 empresas REAIS de PEQUENO E MÉDIO PORTE (SMBs) no Brasil.
           
           CRITÉRIOS OBRIGATÓRIOS:
           1. Apenas BRASIL.
           2. OBRIGATÓRIO ter 10 leads no JSON final. Nunca retorne menos que 10.
-          3. Instagram REAL: Para garantir que o Instagram existe, ESCOLHA EMPRESAS REAIS E CONHECIDAS (restaurantes famosos, lojas locais famosas, confeitarias famosas em São Paulo, Rio de Janeiro, etc). 
-             Exemplos de nível de fama: @mocoto, @paris_6, @carlos_pizza, @brázpizzaria.
-             NÃO INVENTE NOMES GENÉRICOS como "Padaria Pão Quente". Quero empresas de verdade que você conhece da sua base de dados.
-          4. WhatsApp/Email: Se souber o real, coloque. Se não souber, deixe em branco ("").
-          5. Google Maps: Crie um link de busca do Google Maps com o nome real da empresa e a cidade.
+          3. Tamanho da Empresa: PEQUENO e MÉDIO porte. 
+             - PROIBIDO empresas gigantes, franquias nacionais ou lugares extremamente famosos (Ex: Não use Coco Bambu, Paris 6, Mocotó, SmartFit).
+          4. Empresas REAIS (Sem invenção): 
+             - PROIBIDO inventar nomes genéricos (Ex: "Padaria Pão Quente", "Clínica Sorriso", "Mercado Central").
+             - Para encontrar empresas reais, pense em bairros específicos de capitais ou cidades médias (ex: Savassi em BH, Boa Viagem em Recife, Meireles em Fortaleza) e lembre-se de negócios locais REAIS e ESPECÍFICOS que existem lá.
+          5. Instagram REAL e ATIVO: Forneça o @ exato e real. Assuma que eles têm publicações em 2026.
+          6. WhatsApp/Email: Se souber o real, coloque. Se não souber, deixe em branco ("").
+          7. Google Maps: Crie um link de busca do Google Maps com o nome real da empresa e a cidade.
           
           Retorne APENAS JSON no formato:
           {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR"}]}
@@ -41,8 +44,9 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
           content: `Gere exatamente 10 leads B2B REAIS do Brasil para prospecção em ${date}.
           - Apenas Brasil.
           - OBRIGATÓRIO 10 leads.
-          - Instagram DEVE ser real e existir. Escolha empresas reais e conhecidas para não errar o @.
-          - Não invente nomes genéricos.
+          - PEQUENO E MÉDIO PORTE (nada de empresas gigantes ou muito famosas).
+          - EMPRESAS REAIS (nada de nomes genéricos inventados).
+          - Instagram DEVE ser real e ter publicações em 2026.
           - Sugira um serviço de tecnologia específico.
           - Retorne no formato JSON.`
         }
