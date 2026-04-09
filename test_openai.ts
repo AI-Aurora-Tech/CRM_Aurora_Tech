@@ -10,33 +10,34 @@ async function test() {
     messages: [
       {
         role: "system",
-        content: `Você é um especialista em prospecção B2B e pesquisa de mercado. Sua tarefa é encontrar 10 empresas REAIS de pequeno e médio porte (SMBs) em países que falam Português (Brasil) ou Inglês (EUA, Reino Unido, Canadá, etc.).
+        content: `Você é um pesquisador de mercado. Sua tarefa é buscar na sua memória de treinamento 10 empresas REAIS (SMBs) do Brasil.
         
         CRITÉRIOS OBRIGATÓRIOS:
-        1. Localização: Brasil ou países de língua inglesa.
-        2. Dados de Contato: Devem ter WhatsApp real, E-mail real e Instagram real. O Instagram DEVE ter postagens em 2026.
-        3. Sem Site/App: As empresas NÃO podem ter site ou aplicativo registrado na internet.
-        4. Google Maps: Devem estar no Google Maps e ter pelo menos 100 avaliações. Forneça o link direto.
-        5. Dados REAIS: NÃO INVENTE DADOS. Se não encontrar os 3 contatos (Whats, Email, Insta), não inclua a empresa.
-        6. Serviço Sugerido: Analise o negócio e sugira um serviço específico (ex: App de agendamento, Sistema de Gerenciamento, Criação de Site, Automação de CRM).
+        1. Empresas REAIS: Você DEVE fornecer empresas que realmente existem no Brasil. Use nomes reais e cidades reais.
+        2. Contatos REAIS: 
+           - Instagram: Forneça o @ real da empresa se você souber. Se não souber, deixe em branco ("").
+           - WhatsApp/Email: Se você não souber o número ou email real e público, deixe em branco (""). 
+           - REGRA DE OURO: NÃO INVENTE NÚMEROS DE TELEFONE (como +551199999999) OU EMAILS FALSOS. É melhor deixar em branco do que inventar.
+        3. Sem Site: Priorize empresas que, até onde você sabe, não possuem site próprio.
+        4. Google Maps: Crie um link de busca do Google Maps com o nome real da empresa e a cidade.
+        5. Descarte: Se você não souber NENHUM contato real (nem Insta, nem email, nem whats) de uma empresa, NÃO a inclua na lista. Busque outra.
         
         Retorne APENAS JSON no formato:
-        {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR" | "en"}]}
-        
-        Atenção: O campo 'language' deve refletir o idioma do país da empresa.`
+        {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR"}]}
+        `
       },
       {
         role: "user",
-        content: `Gere 10 leads B2B reais (Brasil ou países de língua inglesa) para prospecção em ${date}. 
+        content: `Busque na sua base de dados 10 leads B2B REAIS do Brasil. 
         Requisitos: 
-        - SMBs sem site/app no Google Maps com >100 avaliações.
-        - WhatsApp, E-mail e Instagram (ativo em 2026) OBRIGATÓRIOS.
-        - Inclua link do Google Maps.
-        - Sugira um serviço de tecnologia específico para cada um.
-        Retorne exatamente 10 leads reais.`
+        - Empresas que realmente existem.
+        - Contatos (Insta, Whats, Email) DEVEM ser reais. Se não souber o real, deixe a string vazia "". NÃO INVENTE.
+        - Devem ter pelo menos UM contato preenchido.
+        Retorne exatamente 10 leads no formato JSON.`
       }
     ],
     model: "gpt-4o",
+    response_format: { type: "json_object" },
     max_tokens: 3000,
     temperature: 0.5
   });

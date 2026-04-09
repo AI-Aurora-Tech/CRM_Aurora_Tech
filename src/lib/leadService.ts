@@ -20,29 +20,29 @@ export async function generateDailyLeads(date: string): Promise<Lead[]> {
       messages: [
         {
           role: "system",
-          content: `Você é um gerador de dados de demonstração. Sua tarefa é CRIAR 10 exemplos de leads B2B para preencher um sistema de demonstração.
+          content: `Você é um pesquisador de mercado. Sua tarefa é buscar na sua memória de treinamento 10 empresas REAIS (SMBs) do Brasil.
           
-          CRITÉRIOS:
-          1. Localização: Misture empresas fictícias do Brasil e de países de língua inglesa.
-          2. Dados de Contato: Use dados GENÉRICOS DE DEMONSTRAÇÃO. 
-             - WhatsApp: +55 11 99999-0001, +1 555-0101, etc.
-             - E-mail: contato@empresaexemplo.com.br, info@examplebusiness.com
-             - Instagram: @empresa_exemplo_demo
-          3. Google Maps: Crie um link de busca genérico (ex: https://www.google.com/maps/search/?api=1&query=Empresa+Exemplo).
-          4. Serviço Sugerido: Sugira um serviço de tecnologia (ex: App de agendamento, Sistema de Gerenciamento, Criação de Site).
+          CRITÉRIOS OBRIGATÓRIOS:
+          1. Empresas REAIS: Você DEVE fornecer empresas que realmente existem no Brasil. Use nomes reais e cidades reais.
+          2. Contatos REAIS: 
+             - Instagram: Forneça o @ real da empresa se você souber. Se não souber, deixe em branco ("").
+             - WhatsApp/Email: Se você não souber o número ou email real e público, deixe em branco (""). 
+             - REGRA DE OURO: NÃO INVENTE NÚMEROS DE TELEFONE (como +551199999999) OU EMAILS FALSOS. É melhor deixar em branco do que inventar.
+          3. Sem Site: Priorize empresas que, até onde você sabe, não possuem site próprio.
+          4. Google Maps: Crie um link de busca do Google Maps com o nome real da empresa e a cidade.
+          5. Descarte: Se você não souber NENHUM contato real (nem Insta, nem email, nem whats) de uma empresa, NÃO a inclua na lista. Busque outra.
           
           Retorne APENAS JSON no formato:
-          {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR" | "en"}]}
-          
-          Atenção: O campo 'language' deve refletir o idioma do país da empresa.`
+          {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR"}]}
+          `
         },
         {
           role: "user",
-          content: `Gere 10 leads B2B de demonstração (Brasil e países de língua inglesa) para a data ${date}. 
+          content: `Busque na sua base de dados 10 leads B2B REAIS do Brasil para prospecção em ${date}. 
           Requisitos: 
-          - Simule SMBs sem site/app.
-          - Preencha WhatsApp, E-mail e Instagram com dados genéricos de teste.
-          - Inclua link de busca do Google Maps.
+          - Empresas que realmente existem.
+          - Contatos (Insta, Whats, Email) DEVEM ser reais. Se não souber o real, deixe a string vazia "". NÃO INVENTE.
+          - Devem ter pelo menos UM contato preenchido.
           - Sugira um serviço de tecnologia específico.
           Retorne exatamente 10 leads no formato JSON.`
         }
