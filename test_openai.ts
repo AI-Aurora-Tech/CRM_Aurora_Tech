@@ -10,29 +10,32 @@ async function test() {
     messages: [
       {
         role: "system",
-        content: `Você é um pesquisador de mercado. Sua tarefa é buscar na sua memória de treinamento 10 empresas REAIS (SMBs) do Brasil.
+        content: `Você é um pesquisador de mercado B2B altamente preciso. Sua tarefa é buscar na sua base de conhecimento 10 empresas REAIS de pequeno e médio porte (SMBs).
         
-        CRITÉRIOS OBRIGATÓRIOS:
-        1. Empresas REAIS: Você DEVE fornecer empresas que realmente existem no Brasil. Use nomes reais e cidades reais.
-        2. Contatos REAIS: 
-           - Instagram: Forneça o @ real da empresa se você souber. Se não souber, deixe em branco ("").
-           - WhatsApp/Email: Se você não souber o número ou email real e público, deixe em branco (""). 
-           - REGRA DE OURO: NÃO INVENTE NÚMEROS DE TELEFONE (como +551199999999) OU EMAILS FALSOS. É melhor deixar em branco do que inventar.
-        3. Sem Site: Priorize empresas que, até onde você sabe, não possuem site próprio.
-        4. Google Maps: Crie um link de busca do Google Maps com o nome real da empresa e a cidade.
-        5. Descarte: Se você não souber NENHUM contato real (nem Insta, nem email, nem whats) de uma empresa, NÃO a inclua na lista. Busque outra.
+        CRITÉRIOS OBRIGATÓRIOS E ESTRITOS:
+        1. Localização: Países que falam Português (Brasil, Portugal, etc.) ou Inglês (EUA, Reino Unido, etc.).
+        2. Empresas 100% REAIS: Use nomes reais, descrições reais e cidades reais. NÃO INVENTE NADA.
+        3. Contatos REAIS: A empresa DEVE ter pelo menos uma rede social ou contato direto real e público. Priorize Instagram e WhatsApp. 
+           - Se você não tem certeza absoluta do @ do Instagram, do número do WhatsApp ou do E-mail real, NÃO INVENTE.
+           - Se a empresa não tiver NENHUM contato real conhecido por você, IGNORE-A e busque outra.
+        4. Atividade Recente: Priorize empresas que são ativas nas redes sociais (assuma atividade em 2026).
+        5. Sem Site: Priorize empresas que, até onde você sabe, operam apenas via redes sociais/Google Maps e não possuem site próprio.
+        6. Google Maps: Crie um link de busca do Google Maps com o nome real da empresa e a cidade.
         
         Retorne APENAS JSON no formato:
-        {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR"}]}
+        {"leads": [{"name": "...", "industry": "...", "instagram": "...", "email": "...", "whatsapp": "...", "googleMapsLink": "...", "description": "...", "suggestedService": "...", "language": "pt-BR" | "en"}]}
         `
       },
       {
         role: "user",
-        content: `Busque na sua base de dados 10 leads B2B REAIS do Brasil. 
+        content: `Busque na sua base de dados 10 leads B2B REAIS. 
         Requisitos: 
+        - SMBs em países de língua portuguesa ou inglesa.
         - Empresas que realmente existem.
-        - Contatos (Insta, Whats, Email) DEVEM ser reais. Se não souber o real, deixe a string vazia "". NÃO INVENTE.
-        - Devem ter pelo menos UM contato preenchido.
+        - Contatos (Insta, Whats, Email) DEVEM ser reais. Priorize Insta e Whats. Se não tiver nenhum, ignore a empresa.
+        - Instagram movimentado em 2026.
+        - Sem site registrado.
+        - Sugira um serviço de tecnologia específico.
         Retorne exatamente 10 leads no formato JSON.`
       }
     ],
